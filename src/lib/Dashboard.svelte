@@ -128,7 +128,8 @@
     const wNow = w - kg;
     const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
     const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
-    return { g: Math.round(kg * 1000), idealG, bf, bfNow: +bfNow.toFixed(1) };
+    const muscleG = Math.round((defPos - fatKcal) / 1800 * 1000); // masse maigre : ~1800 kcal/kg
+    return { g: Math.round(kg * 1000), idealG, muscleG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
@@ -228,7 +229,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.1";
+  const BUILD = "V3.2";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -380,9 +381,8 @@
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
     {#if fatLost}
-      <div class="caption" style="margin-top:4px">≈ {fmtG(fatLost.g)} de gras perdu · MG {fatLost.bf}% → {fatLost.bfNow}%</div>
-      <div class="caption fat-note">~{Math.round(progStats.fatShare*100)}% du déficit en gras (protéines à {Math.round(progStats.protPct*100)}% de la cible 1,6 g/kg)</div>
-      <div class="caption fat-note">si macros parfaitement respectées : ≈ {fmtG(fatLost.idealG)} de gras</div>
+      <div class="caption" style="margin-top:4px"><strong>Macro réel :</strong> {fmtG(fatLost.g)} de gras · {fmtG(fatLost.muscleG)} de muscle perdus</div>
+      <div class="caption fat-note"><strong>Macro optimal :</strong> ≈ {fmtG(fatLost.idealG)} de gras perdu</div>
     {/if}
   </div>
   {/if}
