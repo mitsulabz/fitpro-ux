@@ -136,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.3";
+  const BUILD = "V1.4";
   const dateLabel = $derived(todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }));
 
   let showModal = $state(false);
@@ -294,12 +294,12 @@
   <div class="hero-row">
     <!-- Cible du jour -->
     <div class="card hero-card hero-eat">
-      <div class="label">À manger aujourd'hui</div>
+      <div class="label">Journée à</div>
       {#if tIntake > 0}
         {@const reste = tIntake - macros.k}
         <div class="hero-num" style="color:var(--c-text)">{Math.round(tIntake).toLocaleString('fr')}<span class="hero-unit">kcal</span></div>
-        <div class="caption" style="margin-top:6px;color:{reste >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">
-          {reste >= 0 ? `Reste ${Math.round(reste).toLocaleString('fr')} kcal` : `Dépassé de ${Math.round(-reste).toLocaleString('fr')} kcal`}
+        <div class="caption hero-eat-sub" style="margin-top:6px">
+          {reste >= 0 ? `reste ${Math.round(reste).toLocaleString('fr')} kcal à manger` : `dépassé de ${Math.round(-reste).toLocaleString('fr')} kcal`}
         </div>
       {:else}
         <div class="hero-num no-data">—</div>
@@ -539,7 +539,8 @@
   :global(html[data-theme='light']) .progress-card .label,
   :global(html[data-theme='light']) .progress-card .caption,
   :global(html[data-theme='light']) .hero-eat .label,
-  :global(html[data-theme='light']) .hero-retard .label { color:#1a1a1a; }
+  :global(html[data-theme='light']) .hero-retard .label,
+  :global(html[data-theme='light']) .hero-eat .hero-eat-sub { color:#1a1a1a; }
 
 .app-title { font-size:22px; font-weight:700; color:var(--c-text); letter-spacing:-0.5px; }
 .app-title .x { color:var(--c-accent); }
