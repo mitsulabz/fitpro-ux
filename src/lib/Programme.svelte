@@ -45,6 +45,7 @@
   const acts     = $derived((prog?.activites ?? {}) as Record<string, number>);
 
   const currentAct = $derived(profile?.act ?? '1.30');
+  const bmrLive = $derived(calcBMR(profile));
   const totalDays  = $derived(progJours.length);
   const progIdx    = $derived(progJours.findIndex((j: any) => {
     const d = parseJour(j.jour); if (!d) return false;
@@ -285,7 +286,9 @@
       {@const eaten = getEaten(j)}
       {@const today = isToday(j)}
       {@const past = isPast(j)}
-      {@const exp = (j.calories_brulees ?? 0) + ((days as any)[ds]?.extraKcal ?? 0)}
+      {@const actName = (j.activity ?? daySelections[ds] ?? '')}
+      {@const sportK = (actName && actName !== 'Libre') ? (acts[actName] ?? 0) : 0}
+      {@const exp = Math.round(bmrLive * nf(profile.act) + sportK + ((days as any)[ds]?.extraKcal ?? 0))}
       {@const realDef = exp - eaten}
       <div class="jour-card" class:today class:past>
         <div class="jour-num">{i + 1}</div>
