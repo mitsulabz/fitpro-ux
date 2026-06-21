@@ -136,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.5";
+  const BUILD = "V1.6";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -274,7 +274,7 @@
       <div class="label">{$t.dashboard.today}</div>
       <div class="date">{dateLabel}<span class="build-tag">{BUILD}</span></div>
     </div>
-    <div class="app-title">FitPro<span class="x">UX</span></div>
+    <div class="app-title">FitPro<span class="x">X</span></div>
   </div>
 
   {#if totalDays > 0}

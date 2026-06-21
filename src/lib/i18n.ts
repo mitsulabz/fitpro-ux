@@ -30,7 +30,7 @@ const fr = {
     eaten: 'kcal mangé',
   },
   auth: {
-    title: 'FitPro',
+    title: 'FitProX',
     subtitle: 'Suivi nutrition & performance',
     email: 'Email',
     password: 'Mot de passe',
@@ -77,7 +77,7 @@ const en: typeof fr = {
     eaten: 'kcal eaten',
   },
   auth: {
-    title: 'FitPro',
+    title: 'FitProX',
     subtitle: 'Nutrition & performance tracking',
     email: 'Email',
     password: 'Password',
