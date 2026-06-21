@@ -60,20 +60,24 @@
   // Per-day selection state: ds → selected value ('' = sans sport, 'Libre', or activity name)
   let daySelections = $state<Record<string, string>>({});
 
+  // Source de verite : determine l'activite d'un jour depuis la donnee persistee
+  function selectionFor(data: any, j: any, ds: string): string {
+    const d = (data?.days ?? {})[ds];
+    if (d?.progActivity === false) return '';
+    if (d?.progActivity?.name) return d.progActivity.name;
+    const t = j.type ?? '';
+    if (/libre/i.test(t)) return 'Libre';
+    const actNames = new Set(Object.keys(data?.programme?.activites ?? {}));
+    return actNames.has(t) ? t : '';
+  }
+
   function initDaySelections(data: any) {
     const jours: any[] = data?.programme?.jours ?? [];
-    const daysData = data?.days ?? {};
-    const actNames = new Set(Object.keys(data?.programme?.activites ?? {}));
     const sel: Record<string, string> = {};
     jours.forEach((j: any) => {
       const ds = dsOf(j);
       if (!ds) return;
-      const d = daysData[ds];
-      if (d?.progActivity === false) { sel[ds] = ''; return; }
-      if (d?.progActivity?.name) { sel[ds] = d.progActivity.name; return; }
-      // use j.type only if it matches a known activity or Libre, else default to ''
-      const t = j.type ?? '';
-      sel[ds] = (t === 'Libre' || actNames.has(t)) ? t : '';
+      sel[ds] = selectionFor(data, j, ds);
     });
     daySelections = sel;
   }
@@ -189,7 +193,7 @@
     const minIntake = Math.max(Math.round(bmr), sexFloor);
     const newJours = jours.map((j: any) => {
       const ds = dsOf(j);
-      const value = daySelections[ds] ?? '';
+      const value = selectionFor(data, j, ds);
       if (value === 'Libre') {
         const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
         return { ...j, type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
@@ -297,16 +301,22 @@
         <div class="jour-right">
           {#if today}
             <div class="jour-tag">aujourd'hui</div>
+            <div class="jour-metric"><span class="jm-lbl">cible</span> {(j.calories ?? 0).toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {:else if past && eaten > 0}
-            <div class="jour-eaten" style="color:{eaten <= (j.calories??0) ? 'var(--c-green)' : 'var(--c-red)'}">
-              {Math.round(eaten).toLocaleString('fr')} kcal
+            <div class="jour-metric">
+              <span class="jm-lbl">mangé</span>
+              <span style="color:{eaten <= (j.calories??0) ? 'var(--c-green)' : 'var(--c-red)'}">{Math.round(eaten).toLocaleString('fr')}<span class="jm-u"> kcal</span></span>
             </div>
           {:else if past}
-            <div class="jour-eaten muted">—</div>
+            <div class="jour-metric"><span class="jm-lbl">mangé</span> <span class="muted">—</span></div>
           {:else}
-            <div class="jour-cible">{(j.calories ?? 0).toLocaleString('fr')}<span> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">cible</span> {(j.calories ?? 0).toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {/if}
-          <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">−{(j.deficit ?? 0).toLocaleString('fr')}</div>
+          {#if (j.deficit ?? 0) === 0}
+            <div class="jour-def caption" style="color:var(--c-blue)">journée neutre</div>
+          {:else}
+            <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">déficit −{(j.deficit ?? 0).toLocaleString('fr')}</div>
+          {/if}
         </div>
       </div>
       {/each}
@@ -366,4 +376,8 @@
   .jours-head { display:flex; align-items:center; justify-content:space-between; }
   .recalc-btn { border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); }
   .recalc-btn:active { background:var(--c-accent); color:var(--c-accent-fg); }
+
+  .jour-metric { font-size:14px; font-weight:700; color:var(--c-text); text-align:right; }
+  .jm-lbl { font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin-right:3px; }
+  .jm-u { font-size:11px; font-weight:400; color:var(--c-text3); }
 </style>
