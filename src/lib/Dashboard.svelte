@@ -48,7 +48,8 @@
   const tBrulees = $derived((progDay?.calories_brulees ?? 0) + (today?.extraKcal ?? 0));
   const tIntake = $derived(progDay?.calories ?? 0);
   const deficit = $derived(Math.round(macros.k) - tBrulees);
-  const mCible = $derived({ p: progDay?.proteines_g ?? 170, g: progDay?.glucides_g ?? 178, l: progDay?.lipides_g ?? 70 });
+  const protCible = $derived(Math.round(1.9 * (parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100)));
+  const mCible = $derived({ p: progDay?.proteines_g ?? protCible, g: progDay?.glucides_g ?? 178, l: progDay?.lipides_g ?? 70 });
 
   const totalDays = $derived(progJours.length);
   const dayNum = $derived(progIdx >= 0 ? progIdx + 1 : null);
@@ -85,7 +86,7 @@
       const act = actOf(j, ds);
       const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
       const tdee = Math.round(bmr * actF + sportK);
-      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.20, tdee - minIntake));
+      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       totalCible += cible;
       const dd = (days as any)[ds] ?? {};
       const fds = dd.foods ?? [];
@@ -256,7 +257,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.6";
+  const BUILD = "V3.7";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);

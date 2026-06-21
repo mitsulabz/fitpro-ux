@@ -93,10 +93,14 @@
       if (!('Compétition' in a)) { a['Compétition'] = 3500; changed = true; }
       if (!('Autre' in a)) { a['Autre'] = 0; changed = true; }
     }
+    // v2 : ajoute Muscu une fois
+    if (!data?.programme?._seededV2) {
+      if (!('Muscu' in a)) { a['Muscu'] = 250; changed = true; }
+    }
     actEntries = Object.entries(a).map(([name, kcal]) => ({ name, kcal: kcal as number }));
     initDaySelections(data);
-    if (changed || !data?.programme?._seededDefaults) {
-      persist({ ...data, programme: { ...(data.programme ?? {}), activites: a, _seededDefaults: true } });
+    if (changed || !data?.programme?._seededDefaults || !data?.programme?._seededV2) {
+      persist({ ...data, programme: { ...(data.programme ?? {}), activites: a, _seededDefaults: true, _seededV2: true } });
     }
   });
 
@@ -179,7 +183,7 @@
       }
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
       const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
-      const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
+      const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
@@ -204,7 +208,7 @@
       }
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
       const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
-      const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
+      const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
