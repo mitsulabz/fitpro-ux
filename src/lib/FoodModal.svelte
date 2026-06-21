@@ -59,7 +59,7 @@
     return (name ?? '').trim().toLowerCase() + '|' + (per ?? '100');
   }
 
-  async function commitFood(food: Food) {
+  async function commitFood(food: Food, closeAfter = true) {
     const s = get(session);
     const data = get(appData) as any;
     if (!s || !data) return;
@@ -79,7 +79,7 @@
     const newData = { ...data, favorites: favs, days: { ...days, [dayKey]: { ...day, foods } } };
     appData.set(newData);
     saveAppState(s.access_token, s.user.id, newData);
-    onclose();
+    if (closeAfter) onclose();
   }
 
   function addFromFav(fav: any) {
@@ -294,7 +294,7 @@
         </form>
         {#if aiError}<div class="error">{aiError}</div>{/if}
         {#each aiResults as food}
-          <button class="food-row fav-btn" onclick={() => commitFood(food)}>
+          <button class="food-row fav-btn" onclick={() => { commitFood(food, false); aiResults = aiResults.filter((f) => f !== food); }}>
             <div class="food-info">
               <span class="food-name">{food.n}</span>
               <span class="food-macros">{Math.round(food.k)} kcal · P {+food.p.toFixed(1)}g · G {+food.g.toFixed(1)}g · L {+food.l.toFixed(1)}g</span>
