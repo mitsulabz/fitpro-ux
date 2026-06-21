@@ -107,23 +107,28 @@
     });
     const fatShare = defKcalPos > 0 ? fatKcal / defKcalPos : 0.9;
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
-    return { totalCible, realBrule, fatKcal, fatShare, protPct };
+    return { totalCible, realBrule, fatKcal, fatShare, protPct, defKcalPos };
   });
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
     : 0);
 
   // Estimation MG perdue (meilleur cas : suppose assez de proteines pour preserver le muscle)
+  function fmtG(g: number): string {
+    return g >= 1000 ? (g / 1000).toFixed(2).replace('.', ',') + ' kg' : Math.round(g) + ' g';
+  }
   const fatLost = $derived.by(() => {
     const w = nfp(profile.weight), bf = nfp(profile.bf);
     const fatKcal = Math.max(0, progStats.fatKcal);
+    const defPos = Math.max(0, progStats.defKcalPos);
     if (!w || !bf || fatKcal <= 0) return null;
     const kg = fatKcal / 7700;
     const fatInit = w * bf / 100;
     const fatNow = Math.max(0, fatInit - kg);
     const wNow = w - kg;
     const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
-    return { kg: +kg.toFixed(2), bf, bfNow: +bfNow.toFixed(1), dPt: +(bf - bfNow).toFixed(2) };
+    const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
+    return { g: Math.round(kg * 1000), idealG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
@@ -223,7 +228,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.0";
+  const BUILD = "V3.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -375,8 +380,9 @@
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
     {#if fatLost}
-      <div class="caption" style="margin-top:4px">≈ −{fatLost.dPt} pt de masse grasse ({fatLost.bf}% → {fatLost.bfNow}%) · ~{fatLost.kg} kg de gras</div>
+      <div class="caption" style="margin-top:4px">≈ {fmtG(fatLost.g)} de gras perdu · MG {fatLost.bf}% → {fatLost.bfNow}%</div>
       <div class="caption fat-note">~{Math.round(progStats.fatShare*100)}% du déficit en gras (protéines à {Math.round(progStats.protPct*100)}% de la cible 1,6 g/kg)</div>
+      <div class="caption fat-note">si macros parfaitement respectées : ≈ {fmtG(fatLost.idealG)} de gras</div>
     {/if}
   </div>
   {/if}
