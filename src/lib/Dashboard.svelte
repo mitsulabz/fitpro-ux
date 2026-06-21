@@ -136,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.2";
+  const BUILD = "V1.3";
   const dateLabel = $derived(todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }));
 
   let showModal = $state(false);
@@ -291,21 +291,6 @@
   {/if}
 
   <!-- Coach IA -->
-  <div class="card coach-card">
-    <button class="coach-btn" onclick={runCoach} disabled={coachLoading}>
-      {coachLoading ? '⏳ Analyse en cours…' : '🤖 Demander un bilan au coach'}
-    </button>
-    {#if coachText}
-      <div class="coach-out">
-        <div class="coach-text">{coachText}</div>
-        <button class="coach-close" onclick={() => coachText = ''}>✕ Fermer</button>
-      </div>
-    {/if}
-    {#if coachError}
-      <div class="coach-error">{coachError}</div>
-    {/if}
-  </div>
-
   <div class="hero-row">
     <!-- Cible du jour -->
     <div class="card hero-card hero-eat">
@@ -336,6 +321,21 @@
         <div class="caption" style="margin-top:6px">En avance sur le programme</div>
       {/if}
     </div>
+  </div>
+
+  <div class="card coach-card">
+    <button class="coach-btn" onclick={runCoach} disabled={coachLoading}>
+      {coachLoading ? '⏳ Analyse en cours…' : '🤖 Demander un bilan au coach'}
+    </button>
+    {#if coachText}
+      <div class="coach-out">
+        <div class="coach-text">{coachText}</div>
+        <button class="coach-close" onclick={() => coachText = ''}>✕ Fermer</button>
+      </div>
+    {/if}
+    {#if coachError}
+      <div class="coach-error">{coachError}</div>
+    {/if}
   </div>
 
   <div class="macro-row">
@@ -476,9 +476,9 @@
 .day-badge span { font-weight:400; color:var(--c-text3); }
 .hero-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
 .hero-card { padding:16px; }
-.hero-num { font-size:52px; font-weight:200; letter-spacing:-3px; line-height:1; margin:8px 0 0; }
+.hero-num { font-size:26px; font-weight:700; letter-spacing:-0.5px; line-height:1.1; margin:6px 0 0; }
 .hero-num.no-data { color:var(--c-text3); }
-.hero-unit { font-size:18px; font-weight:400; letter-spacing:0; margin-left:3px; color:var(--c-text2); }
+.hero-unit { font-size:13px; font-weight:400; letter-spacing:0; margin-left:3px; color:var(--c-text2); }
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
 .macro-card { padding:14px; }
 .macro-val { font-size:18px; font-weight:600; color:var(--c-text); }
@@ -508,8 +508,8 @@
 .value-accent { font-size:24px; font-weight:500; letter-spacing:-0.5px; }
 .value-sm { font-size:24px; font-weight:500; letter-spacing:-0.5px; color:var(--c-text); }
 .progress-card { padding:18px; margin-bottom:10px; }
-.coach-card { padding:14px; margin-bottom:10px; background:var(--c-surface); border:0.5px solid var(--c-border); }
-.coach-btn { width:100%; border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:var(--r-md); padding:13px; font-weight:700; font-size:14px; cursor:pointer; font-family:var(--font); transition:opacity .15s; }
+.coach-card { padding:0; margin-bottom:10px; background:transparent; border:none; }
+.coach-btn { width:100%; border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:var(--r-md); padding:16px; font-weight:700; font-size:15px; cursor:pointer; font-family:var(--font); transition:opacity .15s; }
 .coach-btn:disabled { opacity:.6; cursor:not-allowed; }
 .coach-out { margin-top:12px; }
 .coach-text { font-size:14px; line-height:1.65; color:var(--c-text); white-space:pre-wrap; }
@@ -543,4 +543,11 @@
 
 .app-title { font-size:22px; font-weight:700; color:var(--c-text); letter-spacing:-0.5px; }
 .app-title .x { color:var(--c-accent); }
+
+  /* Polices uniformisees des cellules (style FitNoobX) */
+  .progress-card .label { font-size:14px; font-weight:700; letter-spacing:.05em; }
+  .hero-card .label { font-size:11px; font-weight:600; }
+  .hero-card .caption { font-size:13px; font-weight:500; }
+  .macro-card .label { font-weight:600; }
+  :global(html[data-theme='light']) .coach-btn { background:#FFC2DF; border-color:#FFC2DF; color:#1a1a1a; }
 </style>
