@@ -96,24 +96,37 @@
   const retard = $derived(expectedDeficit + cumul);
 
   const recentDays = $derived(() => {
-    const result: { key: string; label: string; foods: any[]; total: number; cible: number }[] = [];
+    const result: any[] = [];
+    // plancher : premier jour effectivement loggé (on ne remonte pas avant)
+    let floorTime = Infinity;
+    for (const k of Object.keys(days)) {
+      if (!(days as any)[k]?.foods?.length) continue;
+      const parts = k.split('/').map(Number);
+      if (parts.length === 3) {
+        const t = new Date(parts[2], parts[1]-1, parts[0]).getTime();
+        if (t < floorTime) floorTime = t;
+      }
+    }
     for (let i = 1; i <= 30; i++) {
       const d = new Date(todayDate);
       d.setDate(d.getDate() - i);
       const key = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
       const dayData = (days as any)[key];
-      if (!dayData?.foods?.length) continue;
-      const total = (dayData.foods as any[]).reduce((s: number, f: any) => s + (f.k||0), 0);
+      const hasFood = !!dayData?.foods?.length;
+      const within7 = i <= 7 && d.getTime() >= floorTime;
+      // on garde les 7 derniers jours (>= 1er jour loggé) meme vides, + tout jour loggé au-dela
+      if (!hasFood && !within7) continue;
+      const foods = dayData?.foods ?? [];
+      const total = (foods as any[]).reduce((s: number, f: any) => s + (f.k||0), 0);
       const label = d.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
-      // find programme target for that day
       const jd = progJours.find((j: any) => {
         const pd = parseJour(j.jour);
         if (!pd) return false;
         return pd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }) === key;
       });
       const cible = jd?.calories ?? 0;
-      const extraKcal = dayData.extraKcal ?? 0;
-      result.push({ key, label, foods: dayData.foods, total, cible, extraKcal });
+      const extraKcal = dayData?.extraKcal ?? 0;
+      result.push({ key, label, foods, total, cible, extraKcal });
       if (result.length >= 14) break;
     }
     return result;
@@ -123,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.0";
+  const BUILD = "V1.1";
   const dateLabel = $derived(todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }));
 
   let showModal = $state(false);
@@ -297,7 +310,7 @@
 
   <div class="hero-row">
     <!-- Cible du jour -->
-    <div class="card hero-card">
+    <div class="card hero-card hero-eat">
       <div class="label">À manger aujourd'hui</div>
       {#if tIntake > 0}
         {@const reste = tIntake - macros.k}
@@ -311,7 +324,7 @@
       {/if}
     </div>
     <!-- Retard programme -->
-    <div class="card hero-card">
+    <div class="card hero-card hero-retard">
       <div class="label">Retard programme</div>
       {#if expectedDeficit === 0}
         <div class="hero-num no-data">—</div>
@@ -520,4 +533,13 @@
 .hist-add-btn { width:100%; padding:8px; border:1px dashed var(--c-border); border-radius:8px; background:none; color:var(--c-accent); font-size:13px; cursor:pointer; font-family:var(--font); margin-top:6px; }
 .hist-add-btn:hover { background:var(--c-surface); }
 
+
+  /* Cellules colorees (mode clair) — palette FitNoobX */
+  :global(html[data-theme='light']) .progress-card { background:#FFE98A; border-color:rgba(0,0,0,0.05); }
+  :global(html[data-theme='light']) .hero-eat { background:#79E8B3; border-color:rgba(0,0,0,0.05); }
+  :global(html[data-theme='light']) .hero-retard { background:#BBEFFF; border-color:rgba(0,0,0,0.05); }
+  :global(html[data-theme='light']) .progress-card .label,
+  :global(html[data-theme='light']) .progress-card .caption,
+  :global(html[data-theme='light']) .hero-eat .label,
+  :global(html[data-theme='light']) .hero-retard .label { color:#1a1a1a; }
 </style>
