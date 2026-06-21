@@ -131,9 +131,13 @@
     const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
     // Muscle reel = energie du gras NON perdu (vs macros optimales), convertie en muscle humide.
     // Couple directement a l'ecart de gras -> toujours coherent energetiquement.
-    const muscleKcal = Math.max(0, defPos * 0.90 - fatKcal); // kcal venus du muscle au lieu du gras
-    const muscleG = Math.round(muscleKcal / 1850 * 1000); // muscle ~1850 kcal/kg (humide)
-    return { g: Math.round(kg * 1000), idealG, muscleG, bf, bfNow: +bfNow.toFixed(1) };
+    const muscleKcal = Math.max(0, defPos * 0.90 - fatKcal); // kcal venus de la masse maigre au lieu du gras
+    const leanG = Math.round(muscleKcal / 1850 * 1000); // masse maigre humide (muscle + eau/glycogene)
+    // Part de VRAI muscle : depend de l'apport proteique (bas -> plus de muscle, haut -> surtout eau)
+    const ratio = Math.max(0, Math.min(1, progStats.protPct));
+    const realMuscleG = Math.round(leanG * (0.10 + 0.25 * (1 - ratio)));
+    const waterG = leanG - realMuscleG;
+    return { g: Math.round(kg * 1000), idealG, leanG, realMuscleG, waterG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
@@ -233,7 +237,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.4";
+  const BUILD = "V3.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -385,7 +389,8 @@
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
     {#if fatLost}
-      <div class="caption" style="margin-top:4px"><strong>Macro réel :</strong> {fmtG(fatLost.g)} de gras · {fmtG(fatLost.muscleG)} de muscle perdus</div>
+      <div class="caption" style="margin-top:4px"><strong>Macro réel :</strong> {fmtG(fatLost.g)} de gras · ~{fmtG(fatLost.realMuscleG)} de vrai muscle perdus</div>
+      <div class="caption fat-note">(+ ~{fmtG(fatLost.waterG)} d'eau/glycogène, repris en remangeant)</div>
       <div class="caption fat-note"><strong>Macro optimal :</strong> ≈ {fmtG(fatLost.idealG)} de gras perdu</div>
     {/if}
   </div>
