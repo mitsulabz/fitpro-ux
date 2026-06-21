@@ -136,8 +136,8 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.4";
-  const dateLabel = $derived(todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }));
+  const BUILD = "V1.5";
+  const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
   let modalDayKey = $state(todayKey);
@@ -469,8 +469,8 @@
 {/if}
 
 <style>
-.header { display:flex; align-items:center; justify-content:space-between; padding:20px 0 16px; }
-.date { font-size:20px; font-weight:500; color:var(--c-text); margin-top:3px; letter-spacing:-0.3px; text-transform:capitalize; display:flex; align-items:baseline; gap:8px; }
+.header { display:flex; align-items:center; justify-content:space-between; padding:20px 0 12px; }
+.date { font-size:20px; font-weight:500; color:var(--c-text); margin-top:3px; letter-spacing:-0.3px; display:flex; align-items:baseline; gap:8px; }
 .build-tag { font-size:11px; font-weight:500; color:var(--c-text3); letter-spacing:0; text-transform:none; }
 .day-badge { font-size:13px; font-weight:600; color:var(--c-text2); }
 .day-badge span { font-weight:400; color:var(--c-text3); }
@@ -551,4 +551,9 @@
   .hero-card .caption { font-size:13px; font-weight:500; }
   .macro-card .label { font-weight:600; }
   :global(html[data-theme='light']) .coach-btn { background:#FFC2DF; border-color:#FFC2DF; color:#1a1a1a; }
+
+  /* Uniformisation avec FitNoobX */
+  .header .label { font-weight:600; letter-spacing:.07em; }
+  .progress-card .progress-bar { height:6px; border-radius:3px; background:var(--c-surface2); }
+  .progress-card .progress-fill { border-radius:3px; }
 </style>
