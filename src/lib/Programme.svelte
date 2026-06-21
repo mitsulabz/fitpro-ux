@@ -285,6 +285,8 @@
       {@const eaten = getEaten(j)}
       {@const today = isToday(j)}
       {@const past = isPast(j)}
+      {@const exp = (j.calories_brulees ?? 0) + ((days as any)[ds]?.extraKcal ?? 0)}
+      {@const realDef = exp - eaten}
       <div class="jour-card" class:today class:past>
         <div class="jour-num">{i + 1}</div>
         <div class="jour-info">
@@ -315,10 +317,14 @@
           {:else}
             <div class="jour-metric"><span class="jm-lbl">cible</span> {(j.calories ?? 0).toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {/if}
-          {#if (j.deficit ?? 0) === 0}
+          {#if past && eaten > 0}
+            <div class="jour-def caption" style="color:{realDef >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">
+              {realDef >= 0 ? 'déficit réel −' + Math.round(realDef).toLocaleString('fr') : 'surplus +' + Math.round(-realDef).toLocaleString('fr')}
+            </div>
+          {:else if (j.deficit ?? 0) === 0}
             <div class="jour-def caption" style="color:var(--c-blue)">journée neutre</div>
           {:else}
-            <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">déficit −{(j.deficit ?? 0).toLocaleString('fr')}</div>
+            <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">cible −{(j.deficit ?? 0).toLocaleString('fr')}</div>
           {/if}
         </div>
       </div>
