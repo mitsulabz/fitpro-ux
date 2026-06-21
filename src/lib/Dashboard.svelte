@@ -53,13 +53,28 @@
   const totalDays = $derived(progJours.length);
   const dayNum = $derived(progIdx >= 0 ? progIdx + 1 : null);
   const progressPct = $derived(totalDays > 0 ? Math.round(Math.max(0, progIdx) / totalDays * 100) : 0);
+  // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
+  function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
+  function effDeficit(j: any): number {
+    const jd = parseJour(j.jour); if (!jd) return j.deficit || 0;
+    const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    const dd = (days as any)[key] ?? {};
+    const eaten = (dd.foods ?? []).reduce((a: number, f: any) => a + (f.k||0), 0);
+    const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
+    if (jd0 < todayDate && eaten > 0) {
+      const exp = (j.calories_brulees ?? 0) + (dd.extraKcal ?? 0);
+      return exp - eaten; // deficit reellement realise (signe)
+    }
+    return j.deficit || 0; // jour futur / non loggé : cible planifiee
+  }
+
   const bfProjected = $derived.by(() => {
     const p = ($appData as any)?.profile;
     if (!p) return null;
-    const w = parseFloat(p.weight) || 0;
-    const bf = parseFloat(p.bf) || 0;
+    const w = nf(p.weight);
+    const bf = nf(p.bf);
     if (!w || !bf) return null;
-    const totalDef = progJours.reduce((s: number, j: any) => s + (j.deficit || 0), 0);
+    const totalDef = progJours.reduce((s: number, j: any) => s + effDeficit(j), 0);
     if (!totalDef) return null;
     const kgLost = totalDef / 7700;
     const fatInit = w * bf / 100;
@@ -136,7 +151,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V2.4";
+  const BUILD = "V2.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -184,7 +199,7 @@
     // Projection MG finale
     let mgFinale: number | null = null;
     if (w && bf) {
-      const totalDef = jours.reduce((s: number, j: any) => s + (j.deficit || 0), 0);
+      const totalDef = jours.reduce((s: number, j: any) => s + effDeficit(j), 0);
       if (totalDef > 0) {
         const kgLost = totalDef / 7700;
         const fatInit = w * bf / 100;

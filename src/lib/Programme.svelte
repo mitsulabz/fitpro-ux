@@ -140,16 +140,19 @@
   }
 
   // BMR + TDEE helpers (mirror FitPro logic)
+  // Parse tolerant a la virgule francaise (32,9 -> 32.9)
+  function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
+
   function calcBMR(p: any): number {
-    const w = +p.weight || 100, h = +p.height || 180, age = +p.age || 40;
-    const bf = +p.bf;
+    const w = nf(p.weight) || 100, h = nf(p.height) || 180, age = nf(p.age) || 40;
+    const bf = nf(p.bf);
     if (bf > 0) return 370 + 21.6 * w * (1 - bf / 100);
     const sex = p.sex === 'f' ? -161 : 5;
     return 10 * w + 6.25 * h - 5 * age + sex;
   }
 
   function calcTDEE(bmr: number, actKey: string, sportKcal: number): number {
-    return bmr * (parseFloat(actKey) || 1.4) + sportKcal;
+    return bmr * (nf(actKey) || 1.4) + sportKcal;
   }
 
   // Per-day override — recalculates the jour's calories/deficit
