@@ -136,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.7";
+  const BUILD = "V1.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -556,4 +556,13 @@
   .header .label { font-weight:600; letter-spacing:.07em; }
   .progress-card .progress-bar { height:6px; border-radius:3px; background:var(--c-surface2); }
   .progress-card .progress-fill { border-radius:3px; }
+
+  /* Alignement exact sur le design FitNoobX (onglet Suivi) */
+  .progress-card { padding:16px; margin-bottom:8px; }
+  .hero-row { margin-bottom:8px; }
+  .macro-row { margin-bottom:8px; }
+  .coach-card { margin-bottom:8px; }
+  .progress-card .caption { font-size:13px; color:var(--c-text3); }
+  .progress-card .badge-accent { border-radius:20px; padding:3px 9px; font-weight:700; }
+  .coach-btn { border-width:2px; }
 </style>
