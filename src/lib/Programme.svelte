@@ -80,9 +80,18 @@
 
   onMount(() => {
     const data = get(appData) as any;
-    const a = data?.programme?.activites ?? {};
+    const a = { ...(data?.programme?.activites ?? {}) };
+    // Activites par defaut, semees une seule fois (restent editables/supprimables ensuite)
+    let changed = false;
+    if (!data?.programme?._seededDefaults) {
+      if (!('Compétition' in a)) { a['Compétition'] = 3500; changed = true; }
+      if (!('Autre' in a)) { a['Autre'] = 0; changed = true; }
+    }
     actEntries = Object.entries(a).map(([name, kcal]) => ({ name, kcal: kcal as number }));
     initDaySelections(data);
+    if (changed || !data?.programme?._seededDefaults) {
+      persist({ ...data, programme: { ...(data.programme ?? {}), activites: a, _seededDefaults: true } });
+    }
   });
 
   async function persist(newData: any) {
