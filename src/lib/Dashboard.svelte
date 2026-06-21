@@ -129,9 +129,10 @@
     const wNow = w - kg;
     const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
     const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
-    // Muscle reel (hors eau/glycogene) : proteines manquantes -> part catabolisee -> muscle humide
-    const MUSCLE_FROM_SHORTFALL = 0.30; // ~30% du deficit proteique devient une perte nette de proteine musculaire
-    const muscleG = Math.round(progStats.protShortfall * MUSCLE_FROM_SHORTFALL / 0.22); // muscle ~22% proteine
+    // Muscle reel = energie du gras NON perdu (vs macros optimales), convertie en muscle humide.
+    // Couple directement a l'ecart de gras -> toujours coherent energetiquement.
+    const muscleKcal = Math.max(0, defPos * 0.90 - fatKcal); // kcal venus du muscle au lieu du gras
+    const muscleG = Math.round(muscleKcal / 1850 * 1000); // muscle ~1850 kcal/kg (humide)
     return { g: Math.round(kg * 1000), idealG, muscleG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
@@ -232,7 +233,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.3";
+  const BUILD = "V3.4";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
