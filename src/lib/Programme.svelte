@@ -62,6 +62,7 @@
 
   // Source de verite : determine l'activite d'un jour depuis la donnee persistee
   function selectionFor(data: any, j: any, ds: string): string {
+    if (typeof j?.activity === 'string') return j.activity; // champ explicite = source de verite
     const d = (data?.days ?? {})[ds];
     if (d?.progActivity === false) return '';
     if (d?.progActivity?.name) return d.progActivity.name;
@@ -163,21 +164,20 @@
 
     // Recalculate programme jours
     const jours: any[] = data.programme?.jours ?? [];
+    const bmr = calcBMR(data.profile ?? {});
+    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor); // plancher sante : jamais sous le BMR
     const newJours = jours.map((j: any) => {
       if (dsOf(j) !== ds) return j;
       if (value === 'Libre') {
-        const brulees = j.calories_brulees ?? j.calories ?? 0;
-        return { ...j, type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
+        const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
+        return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
       }
-      const bmr = calcBMR(data.profile ?? {});
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
       const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
-      const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
-      // Plancher sante : ne jamais manger sous le BMR
-      const minIntake = Math.max(Math.round(bmr), sexFloor);
       const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
       const calories = tdee - deficit;
-      return { ...j, type: value || j.type, calories_brulees: tdee, deficit, calories };
+      return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
 
     await persist({ ...data, days: newDays, programme: { ...data.programme, jours: newJours } });
@@ -196,13 +196,13 @@
       const value = selectionFor(data, j, ds);
       if (value === 'Libre') {
         const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
-        return { ...j, type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
+        return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
       }
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
       const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
       const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
       const calories = tdee - deficit;
-      return { ...j, type: value || j.type, calories_brulees: tdee, deficit, calories };
+      return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
     await persist({ ...data, programme: { ...data.programme, jours: newJours } });
   }
