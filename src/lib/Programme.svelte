@@ -159,7 +159,9 @@
       const bmr = calcBMR(data.profile ?? {});
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
       const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
-      const minIntake = (data.profile?.sex === 'f') ? 1200 : 1500;
+      const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
+      // Plancher sante : ne jamais manger sous le BMR
+      const minIntake = Math.max(Math.round(bmr), sexFloor);
       const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
       const calories = tdee - deficit;
       return { ...j, type: value || j.type, calories_brulees: tdee, deficit, calories };
