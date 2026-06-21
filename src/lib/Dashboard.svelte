@@ -136,7 +136,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V1.1";
+  const BUILD = "V1.2";
   const dateLabel = $derived(todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }));
 
   let showModal = $state(false);
@@ -274,9 +274,7 @@
       <div class="label">{$t.dashboard.today}</div>
       <div class="date">{dateLabel}<span class="build-tag">{BUILD}</span></div>
     </div>
-    {#if totalDays > 0}
-    <div class="day-badge">J{dayNum ?? '?'}<span>/{totalDays}</span></div>
-    {/if}
+    <div class="app-title">FitPro<span class="x">UX</span></div>
   </div>
 
   {#if totalDays > 0}
@@ -542,4 +540,7 @@
   :global(html[data-theme='light']) .progress-card .caption,
   :global(html[data-theme='light']) .hero-eat .label,
   :global(html[data-theme='light']) .hero-retard .label { color:#1a1a1a; }
+
+.app-title { font-size:22px; font-weight:700; color:var(--c-text); letter-spacing:-0.5px; }
+.app-title .x { color:var(--c-accent); }
 </style>

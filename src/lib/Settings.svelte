@@ -134,7 +134,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitPro UX · V1.1</div>
+  <div class="version caption">FitPro UX · V1.2</div>
 </div>
 
 <style>
