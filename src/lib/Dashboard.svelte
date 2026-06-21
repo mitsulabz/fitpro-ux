@@ -52,7 +52,48 @@
 
   const totalDays = $derived(progJours.length);
   const dayNum = $derived(progIdx >= 0 ? progIdx + 1 : null);
-  const progressPct = $derived(totalDays > 0 ? Math.round(Math.max(0, progIdx) / totalDays * 100) : 0);
+  // ── Progression reelle : kcal reellement brulees / total a bruler jusqu'a la fin ──
+  const profile = $derived(($appData as any)?.profile ?? {});
+  const activites = $derived((prog?.activites ?? {}) as Record<string, number>);
+  function nfp(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
+  function bmrOf(pr: any): number {
+    const w = nfp(pr.weight) || 100, h = nfp(pr.height) || 180, age = nfp(pr.age) || 40, bf = nfp(pr.bf);
+    if (bf > 0) return 370 + 21.6 * w * (1 - bf / 100);
+    const sex = pr.sex === 'f' ? -161 : 5;
+    return 10 * w + 6.25 * h - 5 * age + sex;
+  }
+  function actOf(j: any, ds: string): string {
+    if (typeof j?.activity === 'string') return j.activity;
+    const d = (days as any)[ds];
+    if (d?.progActivity === false) return '';
+    if (d?.progActivity?.name) return d.progActivity.name;
+    const t = j.type ?? '';
+    return /libre/i.test(t) ? 'Libre' : t;
+  }
+  const progStats = $derived.by(() => {
+    const bmr = bmrOf(profile);
+    const actF = nfp(profile.act) || 1.4;
+    const sexFloor = profile.sex === 'f' ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    let totalCible = 0, realBrule = 0;
+    progJours.forEach((j: any) => {
+      const jd = parseJour(j.jour); if (!jd) return;
+      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+      const act = actOf(j, ds);
+      const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
+      const tdee = Math.round(bmr * actF + sportK);
+      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.20, tdee - minIntake));
+      totalCible += cible;
+      const dd = (days as any)[ds] ?? {};
+      const eaten = (dd.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
+      const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
+      if (jd0 < todayDate && eaten > 0) realBrule += (tdee + (dd.extraKcal ?? 0)) - eaten;
+    });
+    return { totalCible, realBrule };
+  });
+  const progressPct = $derived(progStats.totalCible > 0
+    ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
+    : 0);
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
   function effDeficit(j: any): number {
@@ -151,7 +192,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V2.7";
+  const BUILD = "V2.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -301,7 +342,7 @@
     <div class="progress-bar" style="margin-top:10px">
       <div class="progress-fill" style="width:{progressPct}%"></div>
     </div>
-    <div class="caption" style="margin-top:6px">J{dayNum} sur {totalDays}</div>
+    <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
   </div>
   {/if}
 
