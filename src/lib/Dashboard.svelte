@@ -94,6 +94,19 @@
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
     : 0);
+
+  // Estimation MG perdue (meilleur cas : suppose assez de proteines pour preserver le muscle)
+  const fatLost = $derived.by(() => {
+    const w = nfp(profile.weight), bf = nfp(profile.bf);
+    const burned = Math.max(0, progStats.realBrule);
+    if (!w || !bf || burned <= 0) return null;
+    const kg = burned / 7700;
+    const fatInit = w * bf / 100;
+    const fatNow = Math.max(0, fatInit - kg);
+    const wNow = w - kg;
+    const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
+    return { kg: +kg.toFixed(2), bf, bfNow: +bfNow.toFixed(1), dPt: +(bf - bfNow).toFixed(2) };
+  });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
   function effDeficit(j: any): number {
@@ -192,7 +205,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V2.8";
+  const BUILD = "V2.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -343,6 +356,10 @@
       <div class="progress-fill" style="width:{progressPct}%"></div>
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
+    {#if fatLost}
+      <div class="caption" style="margin-top:4px">≈ −{fatLost.dPt} pt de masse grasse ({fatLost.bf}% → {fatLost.bfNow}%) · ~{fatLost.kg} kg de gras</div>
+      <div class="caption fat-note">au mieux : suppose assez de protéines pour préserver le muscle</div>
+    {/if}
   </div>
   {/if}
 
@@ -621,4 +638,6 @@
   .progress-card .caption { font-size:13px; color:var(--c-text3); }
   .progress-card .badge-accent { border-radius:20px; padding:3px 9px; font-weight:700; }
   .coach-btn { border-width:2px; }
+
+  .fat-note { font-size:11px; color:var(--c-text3); font-style:italic; margin-top:2px; }
 </style>
