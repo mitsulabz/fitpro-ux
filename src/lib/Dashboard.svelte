@@ -73,9 +73,12 @@
   const progStats = $derived.by(() => {
     const bmr = bmrOf(profile);
     const actF = nfp(profile.act) || 1.4;
+    const w = nfp(profile.weight) || 100;
+    const pTargetDay = 1.6 * w; // g de proteines/jour pour preserver le muscle
     const sexFloor = profile.sex === 'f' ? 1200 : 1500;
     const minIntake = Math.max(Math.round(bmr), sexFloor);
     let totalCible = 0, realBrule = 0;
+    let fatKcal = 0, defKcalPos = 0, protEaten = 0, protTarget = 0;
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
       const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -85,11 +88,26 @@
       const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.20, tdee - minIntake));
       totalCible += cible;
       const dd = (days as any)[ds] ?? {};
-      const eaten = (dd.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
+      const fds = dd.foods ?? [];
+      const eaten = fds.reduce((s: number, f: any) => s + (f.k||0), 0);
       const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
-      if (jd0 < todayDate && eaten > 0) realBrule += (tdee + (dd.extraKcal ?? 0)) - eaten;
+      if (jd0 < todayDate && eaten > 0) {
+        const def = (tdee + (dd.extraKcal ?? 0)) - eaten;
+        realBrule += def;
+        if (def > 0) {
+          const pDay = fds.reduce((s: number, f: any) => s + (f.p||0), 0);
+          const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, pDay / pTargetDay)) : 1;
+          const fatFrac = 0.70 + 0.20 * ratio; // 0.70 (0 proteines) -> 0.90 (cible atteinte)
+          fatKcal += def * fatFrac;
+          defKcalPos += def;
+          protEaten += pDay;
+          protTarget += pTargetDay;
+        }
+      }
     });
-    return { totalCible, realBrule };
+    const fatShare = defKcalPos > 0 ? fatKcal / defKcalPos : 0.9;
+    const protPct = protTarget > 0 ? protEaten / protTarget : 1;
+    return { totalCible, realBrule, fatKcal, fatShare, protPct };
   });
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
@@ -98,9 +116,9 @@
   // Estimation MG perdue (meilleur cas : suppose assez de proteines pour preserver le muscle)
   const fatLost = $derived.by(() => {
     const w = nfp(profile.weight), bf = nfp(profile.bf);
-    const burned = Math.max(0, progStats.realBrule);
-    if (!w || !bf || burned <= 0) return null;
-    const kg = burned / 7700;
+    const fatKcal = Math.max(0, progStats.fatKcal);
+    if (!w || !bf || fatKcal <= 0) return null;
+    const kg = fatKcal / 7700;
     const fatInit = w * bf / 100;
     const fatNow = Math.max(0, fatInit - kg);
     const wNow = w - kg;
@@ -205,7 +223,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V2.9";
+  const BUILD = "V3.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -358,7 +376,7 @@
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
     {#if fatLost}
       <div class="caption" style="margin-top:4px">≈ −{fatLost.dPt} pt de masse grasse ({fatLost.bf}% → {fatLost.bfNow}%) · ~{fatLost.kg} kg de gras</div>
-      <div class="caption fat-note">au mieux : suppose assez de protéines pour préserver le muscle</div>
+      <div class="caption fat-note">~{Math.round(progStats.fatShare*100)}% du déficit en gras (protéines à {Math.round(progStats.protPct*100)}% de la cible 1,6 g/kg)</div>
     {/if}
   </div>
   {/if}
