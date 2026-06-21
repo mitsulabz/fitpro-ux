@@ -170,6 +170,30 @@
     await persist({ ...data, days: newDays, programme: { ...data.programme, jours: newJours } });
   }
 
+  // Recalcule TOUS les jours avec le profil + activites + regle BMR actuels
+  async function recalcAll() {
+    const data = get(appData) as any;
+    const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
+    const jours: any[] = data.programme?.jours ?? [];
+    const bmr = calcBMR(data.profile ?? {});
+    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const newJours = jours.map((j: any) => {
+      const ds = dsOf(j);
+      const value = daySelections[ds] ?? '';
+      if (value === 'Libre') {
+        const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
+        return { ...j, type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
+      }
+      const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
+      const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
+      const deficit = Math.round(Math.min(tdee * 0.20, tdee - minIntake));
+      const calories = tdee - deficit;
+      return { ...j, type: value || j.type, calories_brulees: tdee, deficit, calories };
+    });
+    await persist({ ...data, programme: { ...data.programme, jours: newJours } });
+  }
+
   function isToday(j: any) { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()===todayDate.getTime(); }
   function isPast(j: any)  { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()<todayDate.getTime(); }
   function getEaten(j: any): number {
@@ -235,7 +259,10 @@
   {#if progJours.length === 0}
     <div class="empty">Aucun programme chargé</div>
   {:else}
-    <div class="section-title-flat">Jours du programme</div>
+    <div class="jours-head">
+      <span class="section-title-flat">Jours du programme</span>
+      <button class="recalc-btn" onclick={recalcAll}>↻ Recalculer</button>
+    </div>
     <div class="jour-list">
       {#each progJours as j, i}
       {@const ds = dsOf(j)}
@@ -326,4 +353,8 @@
 .muted { color:var(--c-text3) !important; }
 .jour-def { font-size:10px; margin-top:2px; }
 .jour-tag { background:var(--c-accent); color:var(--c-accent-fg); border-radius:6px; padding:2px 7px; font-size:10px; font-weight:600; }
+
+  .jours-head { display:flex; align-items:center; justify-content:space-between; }
+  .recalc-btn { border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); }
+  .recalc-btn:active { background:var(--c-accent); color:var(--c-accent-fg); }
 </style>
