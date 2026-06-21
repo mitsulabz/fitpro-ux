@@ -78,7 +78,7 @@
     const sexFloor = profile.sex === 'f' ? 1200 : 1500;
     const minIntake = Math.max(Math.round(bmr), sexFloor);
     let totalCible = 0, realBrule = 0;
-    let fatKcal = 0, defKcalPos = 0, protEaten = 0, protTarget = 0;
+    let fatKcal = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
       const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -102,12 +102,13 @@
           defKcalPos += def;
           protEaten += pDay;
           protTarget += pTargetDay;
+          protShortfall += Math.max(0, pTargetDay - pDay); // g de proteines manquantes (jours en deficit)
         }
       }
     });
     const fatShare = defKcalPos > 0 ? fatKcal / defKcalPos : 0.9;
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
-    return { totalCible, realBrule, fatKcal, fatShare, protPct, defKcalPos };
+    return { totalCible, realBrule, fatKcal, fatShare, protPct, defKcalPos, protShortfall };
   });
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
@@ -128,7 +129,9 @@
     const wNow = w - kg;
     const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
     const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
-    const muscleG = Math.round((defPos - fatKcal) / 1800 * 1000); // masse maigre : ~1800 kcal/kg
+    // Muscle reel (hors eau/glycogene) : proteines manquantes -> part catabolisee -> muscle humide
+    const MUSCLE_FROM_SHORTFALL = 0.30; // ~30% du deficit proteique devient une perte nette de proteine musculaire
+    const muscleG = Math.round(progStats.protShortfall * MUSCLE_FROM_SHORTFALL / 0.22); // muscle ~22% proteine
     return { g: Math.round(kg * 1000), idealG, muscleG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
@@ -229,7 +232,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V3.2";
+  const BUILD = "V3.3";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
