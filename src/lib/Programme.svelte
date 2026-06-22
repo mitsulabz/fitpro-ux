@@ -46,6 +46,7 @@
 
   const currentAct = $derived(profile?.act ?? '1.30');
   const bmrLive = $derived(calcBMR(profile));
+  const minIntakeLive = $derived(Math.max(Math.round(bmrLive), profile.sex === 'f' ? 1200 : 1500));
   // Projection poids + MG au dernier jour : historique reel (passe loggé) + cibles du programme (futur)
   const endProj = $derived.by(() => {
     const data = $appData as any;
@@ -337,9 +338,12 @@
       {@const eaten = getEaten(j)}
       {@const today = isToday(j)}
       {@const past = isPast(j)}
-      {@const actName = selectionFor($appData, j, ds)}
-      {@const sportK = (actName && actName !== 'Libre') ? (acts[actName] ?? 0) : 0}
-      {@const exp = Math.round(bmrLive * nf(profile.act) + sportK + ((days as any)[ds]?.extraKcal ?? 0))}
+      {@const sel = daySelections[ds] ?? ''}
+      {@const sportK = (sel && sel !== 'Libre') ? (acts[sel] ?? 0) : 0}
+      {@const tdeeLive = Math.round(bmrLive * nf(profile.act) + sportK)}
+      {@const cibleLive = sel === 'Libre' ? 0 : Math.round(Math.min(tdeeLive * 0.25, tdeeLive - minIntakeLive))}
+      {@const intakeLive = sel === 'Libre' ? tdeeLive : tdeeLive - cibleLive}
+      {@const exp = tdeeLive + ((days as any)[ds]?.extraKcal ?? 0)}
       {@const realDef = exp - eaten}
       <div class="jour-card" class:today class:past>
         <div class="jour-num">{i + 1}</div>
@@ -360,25 +364,25 @@
         <div class="jour-right">
           {#if today}
             <div class="jour-tag">aujourd'hui</div>
-            <div class="jour-metric"><span class="jm-lbl">cible</span> {(j.calories ?? 0).toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">cible</span> {intakeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {:else if past && eaten > 0}
             <div class="jour-metric">
               <span class="jm-lbl">mangé</span>
-              <span style="color:{eaten <= (j.calories??0) ? 'var(--c-green)' : 'var(--c-red)'}">{Math.round(eaten).toLocaleString('fr')}<span class="jm-u"> kcal</span></span>
+              <span style="color:{eaten <= intakeLive ? 'var(--c-green)' : 'var(--c-red)'}">{Math.round(eaten).toLocaleString('fr')}<span class="jm-u"> kcal</span></span>
             </div>
           {:else if past}
             <div class="jour-metric"><span class="jm-lbl">mangé</span> <span class="muted">—</span></div>
           {:else}
-            <div class="jour-metric"><span class="jm-lbl">cible</span> {(j.calories ?? 0).toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">cible</span> {intakeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {/if}
           {#if past && eaten > 0}
             <div class="jour-def caption" style="color:{realDef >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">
               {realDef >= 0 ? 'déficit réel −' + Math.round(realDef).toLocaleString('fr') : 'surplus +' + Math.round(-realDef).toLocaleString('fr')}
             </div>
-          {:else if (j.deficit ?? 0) === 0}
+          {:else if sel === 'Libre'}
             <div class="jour-def caption" style="color:var(--c-blue)">journée neutre</div>
           {:else}
-            <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">cible −{(j.deficit ?? 0).toLocaleString('fr')}</div>
+            <div class="jour-def caption" style="color:{typeColor(j.type ?? '')}">cible −{cibleLive.toLocaleString('fr')}</div>
           {/if}
         </div>
       </div>
