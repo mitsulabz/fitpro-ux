@@ -48,8 +48,14 @@
   const tBrulees = $derived((progDay?.calories_brulees ?? 0) + (today?.extraKcal ?? 0));
   const tIntake = $derived(progDay?.calories ?? 0);
   const deficit = $derived(Math.round(macros.k) - tBrulees);
-  const protCible = $derived(Math.round(1.9 * (parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100)));
-  const mCible = $derived({ p: progDay?.proteines_g ?? protCible, g: progDay?.glucides_g ?? 178, l: progDay?.lipides_g ?? 70 });
+  const mCible = $derived.by(() => {
+    const w = parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100;
+    const kcal = tIntake > 0 ? tIntake : 1850; // repli si pas de cible du jour
+    const p = Math.round(1.9 * w);
+    const l = Math.round(0.6 * w);
+    const g = Math.max(0, Math.round((kcal - p * 4 - l * 9) / 4));
+    return { p, g, l };
+  });
 
   const totalDays = $derived(progJours.length);
   const dayNum = $derived(progIdx >= 0 ? progIdx + 1 : null);
@@ -257,7 +263,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V4.8";
+  const BUILD = "V4.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
