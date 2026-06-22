@@ -268,15 +268,18 @@
 </script>
 
 <div class="scroll-area">
-  <div class="pheader">
-    <div>
-      <div class="label">Programme</div>
-      <div class="ptitle">{prog?.date_debut ?? ''} → {prog?.date_fin ?? ''}</div>
+  {#if endProj}
+  <div class="proj-sticky">
+    <div class="section-card proj-card">
+      <div class="section-title" style="margin-top:0">Objectif au {endProj.endStr}</div>
+      <div class="proj-row">
+        <div class="proj-item"><div class="proj-val">{endProj.kg} kg</div><div class="proj-lbl">Poids estimé</div></div>
+        <div class="proj-item"><div class="proj-val">{endProj.bf}%</div><div class="proj-lbl">Masse grasse</div></div>
+      </div>
+      <div class="caption proj-sub">−{endProj.lost} kg de gras · historique réel + cibles du programme</div>
     </div>
-    {#if dayNum}
-    <div class="day-badge">J{dayNum}<span>/{totalDays}</span></div>
-    {/if}
   </div>
+  {/if}
 
   <!-- Niveau d'activité de base -->
   <div class="section-card">
@@ -314,18 +317,6 @@
       <button class="act-add-btn" onclick={addActivity} disabled={!newActName.trim()}>+</button>
     </div>
   </div>
-
-  <!-- Projection fin de programme -->
-  {#if endProj}
-  <div class="section-card proj-card">
-    <div class="section-title" style="margin-top:0">Objectif au {endProj.endStr}</div>
-    <div class="proj-row">
-      <div class="proj-item"><div class="proj-val">{endProj.kg} kg</div><div class="proj-lbl">Poids estimé</div></div>
-      <div class="proj-item"><div class="proj-val">{endProj.bf}%</div><div class="proj-lbl">Masse grasse</div></div>
-    </div>
-    <div class="caption proj-sub">−{endProj.lost} kg de gras · historique réel + cibles du programme</div>
-  </div>
-  {/if}
 
   <!-- Liste des jours -->
   {#if progJours.length === 0}
@@ -461,4 +452,7 @@
   .recalc-btn.dirty { background:var(--c-accent); color:var(--c-accent-fg); }
 
   .save-status { font-size:12px; font-weight:600; color:var(--c-text3); }
+
+  .proj-sticky { position:sticky; top:env(safe-area-inset-top, 0px); z-index:10; background:var(--c-bg); padding:8px 0 10px; }
+  .proj-sticky .proj-card { margin-bottom:0; }
 </style>
