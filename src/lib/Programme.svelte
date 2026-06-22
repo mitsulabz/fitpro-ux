@@ -129,10 +129,16 @@
     if (!data?.programme?._seededV2) {
       if (!('Muscu' in a)) { a['Muscu'] = 250; changed = true; }
     }
+    // v3 : activites combinees muscu + velo elliptique
+    if (!data?.programme?._seededV3) {
+      if (!('Muscu + vélo 30mn' in a)) { a['Muscu + vélo 30mn'] = 500; changed = true; }
+      if (!('Muscu + vélo 45mn' in a)) { a['Muscu + vélo 45mn'] = 625; changed = true; }
+      if (!('Muscu + vélo 1h' in a)) { a['Muscu + vélo 1h'] = 750; changed = true; }
+    }
     actEntries = Object.entries(a).map(([name, kcal]) => ({ name, kcal: kcal as number }));
     initDaySelections(data);
-    if (changed || !data?.programme?._seededDefaults || !data?.programme?._seededV2) {
-      persist({ ...data, programme: { ...(data.programme ?? {}), activites: a, _seededDefaults: true, _seededV2: true } });
+    if (changed || !data?.programme?._seededDefaults || !data?.programme?._seededV2 || !data?.programme?._seededV3) {
+      persist({ ...data, programme: { ...(data.programme ?? {}), activites: a, _seededDefaults: true, _seededV2: true, _seededV3: true } });
     }
   });
 
