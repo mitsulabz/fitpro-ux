@@ -2,7 +2,7 @@
   import { appData, session, persistSession } from './store';
   import { saveAppState, refreshToken } from './supabase';
   import { get } from 'svelte/store';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   const ACT_LEVELS = [
     { key:'1.10', label:'Bloqué au lit',                    desc:'×1.10 · maladie, < 2 000 pas/j' },
@@ -253,6 +253,8 @@
     saveStatus = 'Enregistrement…';
     _saveTimer = setTimeout(() => recalcAll(), 1000);
   });
+  // En quittant l'onglet : on force la sauvegarde si une modif est en attente
+  onDestroy(() => { if (_saveTimer) { clearTimeout(_saveTimer); recalcAll(); } });
 
   function isToday(j: any) { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()===todayDate.getTime(); }
   function isPast(j: any)  { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()<todayDate.getTime(); }
