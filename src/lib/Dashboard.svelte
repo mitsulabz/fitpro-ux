@@ -263,7 +263,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V4.9";
+  const BUILD = "V5.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -298,6 +298,9 @@
   let coachLoading = $state(false);
   let coachText = $state('');
   let coachError = $state('');
+  let sosLoading = $state(false);
+  let sosText = $state('');
+  let sosError = $state('');
 
   function buildCoachSummary() {
     const data = get(appData) as any;
@@ -393,6 +396,28 @@
     coachLoading = false;
   }
 
+  async function runSos() {
+    sosLoading = true; sosText = ''; sosError = '';
+    try {
+      const s = get(session);
+      let token = s?.access_token ?? '';
+      try { const fresh = await refreshToken(s!.refresh_token); persistSession(fresh); token = fresh.access_token; } catch {}
+      const eaten = { p: Math.round(macros.p), g: Math.round(macros.g), l: Math.round(macros.l), k: Math.round(macros.k) };
+      const cible = { p: mCible.p, g: mCible.g, l: mCible.l };
+      const reste = { p: Math.max(0, cible.p - eaten.p), g: Math.max(0, cible.g - eaten.g), l: Math.max(0, cible.l - eaten.l) };
+      const data = { deja_mange: eaten, cibles: cible, reste, contraintes: 'Ne mange pas de viande SAUF steak hache et blanc de poulet. Pas de poisson sauf si propose explicitement comme option. Privilegie oeufs, laitages 0%, legumineuses, tofu, fromage, whey.' };
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/coach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: 'sos-macros', data }),
+      });
+      const d = await r.json();
+      if (d.text) sosText = d.text;
+      else sosError = d.error ?? 'Erreur S.O.S';
+    } catch { sosError = 'Erreur réseau'; }
+    sosLoading = false;
+  }
+
 </script>
 
 <div class="scroll-area">
@@ -486,6 +511,20 @@
       <div class="macro-val">{actual}<span class="macro-target">/{m.cible}g</span></div>
     </div>
     {/each}
+  </div>
+
+  <!-- S.O.S Macros -->
+  <div class="card sos-card">
+    <button class="sos-btn" onclick={runSos} disabled={sosLoading}>
+      {sosLoading ? '⏳ Analyse en cours…' : '🆘 S.O.S Macros'}
+    </button>
+    {#if sosText}
+      <div class="coach-out">
+        <div class="coach-text">{sosText}</div>
+        <button class="coach-close" onclick={() => sosText = ''}>✕ Fermer</button>
+      </div>
+    {/if}
+    {#if sosError}<div class="coach-error">{sosError}</div>{/if}
   </div>
 
   <!-- Repas du jour -->
@@ -700,4 +739,9 @@
   .coach-btn { border-width:2px; }
 
   .fat-note { font-size:11px; color:var(--c-text3); font-style:italic; margin-top:2px; }
+
+  .sos-card { padding:0; margin-bottom:10px; background:transparent; border:none; }
+  .sos-btn { width:100%; border:2px solid var(--c-blue); background:transparent; color:var(--c-blue); border-radius:var(--r-md); padding:16px; font-weight:700; font-size:15px; cursor:pointer; font-family:var(--font); }
+  .sos-btn:disabled { opacity:.6; cursor:not-allowed; }
+  :global(html[data-theme='light']) .sos-btn { background:#BBEFFF; border-color:#BBEFFF; color:#1a1a1a; }
 </style>
