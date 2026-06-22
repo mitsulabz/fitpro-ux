@@ -350,7 +350,7 @@
           <div class="jour-name">{j.jour}</div>
           <!-- Sélecteur activité du jour -->
           <select class="jour-act-sel"
-            value={daySelections[ds] ?? j.type ?? ''}
+            value={selectionFor($appData, j, ds)}
             onchange={(e) => setDayActivity(ds, (e.target as HTMLSelectElement).value)}
           >
             <option value="">Régime sans sport</option>
