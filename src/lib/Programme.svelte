@@ -60,7 +60,7 @@
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
       const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-      const act = selectionFor(data, j, ds);
+      const act = daySelections[ds] ?? selectionFor(data, j, ds);
       const sportK = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
       const tdee = Math.round(bmr * actF + sportK);
       const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
@@ -233,7 +233,7 @@
     const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours } };
     // MAJ UI synchrone (en 1 clic), sauvegarde reseau en arriere-plan
     appData.set(newData);
-    initDaySelections(newData);
+    saveStatus = '✓ Enregistré';
     const s = get(session);
     if (s) {
       refreshToken(s.refresh_token)
@@ -242,13 +242,16 @@
     }
   }
 
-  // Y a-t-il des choix non encore appliques ?
-  const dirty = $derived.by(() => {
-    const data = $appData as any;
-    return progJours.some((j: any) => {
-      const ds = dsOf(j);
-      return (daySelections[ds] ?? '') !== selectionFor(data, j, ds);
-    });
+  // Enregistrement automatique (debounce) quand les choix changent
+  let saveStatus = $state('');
+  let _firstSave = true;
+  let _saveTimer: any;
+  $effect(() => {
+    JSON.stringify(daySelections); // dependance reactive
+    if (_firstSave) { _firstSave = false; return; }
+    clearTimeout(_saveTimer);
+    saveStatus = 'Enregistrement…';
+    _saveTimer = setTimeout(() => recalcAll(), 1000);
   });
 
   function isToday(j: any) { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()===todayDate.getTime(); }
@@ -330,7 +333,7 @@
   {:else}
     <div class="jours-head">
       <span class="section-title-flat">Jours du programme</span>
-      <button class="recalc-btn" class:dirty onclick={recalcAll}>↻ Recalculer{#if dirty} •{/if}</button>
+      {#if saveStatus}<span class="save-status">{saveStatus}</span>{/if}
     </div>
     <div class="jour-list">
       {#each progJours as j, i}
@@ -456,4 +459,6 @@
   .proj-sub { text-align:center; }
 
   .recalc-btn.dirty { background:var(--c-accent); color:var(--c-accent-fg); }
+
+  .save-status { font-size:12px; font-weight:600; color:var(--c-text3); }
 </style>
