@@ -46,6 +46,38 @@
 
   const currentAct = $derived(profile?.act ?? '1.30');
   const bmrLive = $derived(calcBMR(profile));
+  // Projection poids + MG au dernier jour : historique reel (passe loggé) + cibles du programme (futur)
+  const endProj = $derived.by(() => {
+    const data = $appData as any;
+    const w = nf(profile.weight), bf = nf(profile.bf);
+    if (!w || !bf || progJours.length === 0) return null;
+    const bmr = calcBMR(profile);
+    const actF = nf(profile.act) || 1.4;
+    const sexFloor = profile.sex === 'f' ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    let totalDef = 0;
+    progJours.forEach((j: any) => {
+      const jd = parseJour(j.jour); if (!jd) return;
+      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+      const act = selectionFor(data, j, ds);
+      const sportK = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
+      const tdee = Math.round(bmr * actF + sportK);
+      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
+      const dd = (data?.days ?? {})[ds] ?? {};
+      const eaten = (dd.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
+      const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
+      if (jd0 < todayDate && eaten > 0) totalDef += (tdee + (dd.extraKcal ?? 0)) - eaten; // reel passe
+      else totalDef += cible; // cible programme (aujourd'hui + futur + passe non loggé)
+    });
+    const fatKg = Math.max(0, totalDef) / 7700;
+    const fatInit = w * bf / 100;
+    const endW = w - fatKg;
+    const endBf = endW > 0 ? (fatInit - fatKg) / endW * 100 : bf;
+    const last = progJours[progJours.length - 1];
+    const endD = last ? parseJour(last.jour) : null;
+    const endStr = endD ? endD.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }) : '—';
+    return { endStr, kg: endW.toFixed(1), bf: endBf.toFixed(1), lost: fatKg.toFixed(1) };
+  });
   const totalDays  = $derived(progJours.length);
   const progIdx    = $derived(progJours.findIndex((j: any) => {
     const d = parseJour(j.jour); if (!d) return false;
@@ -276,6 +308,18 @@
     </div>
   </div>
 
+  <!-- Projection fin de programme -->
+  {#if endProj}
+  <div class="section-card proj-card">
+    <div class="section-title" style="margin-top:0">Objectif au {endProj.endStr}</div>
+    <div class="proj-row">
+      <div class="proj-item"><div class="proj-val">{endProj.kg} kg</div><div class="proj-lbl">Poids estimé</div></div>
+      <div class="proj-item"><div class="proj-val">{endProj.bf}%</div><div class="proj-lbl">Masse grasse</div></div>
+    </div>
+    <div class="caption proj-sub">−{endProj.lost} kg de gras · historique réel + cibles du programme</div>
+  </div>
+  {/if}
+
   <!-- Liste des jours -->
   {#if progJours.length === 0}
     <div class="empty">Aucun programme chargé</div>
@@ -396,4 +440,11 @@
   .jour-metric { font-size:14px; font-weight:700; color:var(--c-text); text-align:right; }
   .jm-lbl { font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin-right:3px; }
   .jm-u { font-size:11px; font-weight:400; color:var(--c-text3); }
+
+  .proj-card { background:var(--c-surface); }
+  .proj-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:8px 0 6px; }
+  .proj-item { text-align:center; padding:10px; background:var(--c-surface2); border-radius:var(--r-md); }
+  .proj-val { font-size:24px; font-weight:700; color:var(--c-accent); letter-spacing:-0.5px; }
+  .proj-lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--c-text3); margin-top:2px; }
+  .proj-sub { text-align:center; }
 </style>
