@@ -263,7 +263,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.0";
+  const BUILD = "V5.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -404,7 +404,7 @@
       try { const fresh = await refreshToken(s!.refresh_token); persistSession(fresh); token = fresh.access_token; } catch {}
       const eaten = { p: Math.round(macros.p), g: Math.round(macros.g), l: Math.round(macros.l), k: Math.round(macros.k) };
       const cible = { p: mCible.p, g: mCible.g, l: mCible.l };
-      const reste = { p: Math.max(0, cible.p - eaten.p), g: Math.max(0, cible.g - eaten.g), l: Math.max(0, cible.l - eaten.l) };
+      const rp = Math.max(0, cible.p - eaten.p), rg = Math.max(0, cible.g - eaten.g), rl = Math.max(0, cible.l - eaten.l); const reste = { p: rp, g: rg, l: rl, kcal: Math.round(rp*4 + rg*4 + rl*9) };
       const data = { deja_mange: eaten, cibles: cible, reste, contraintes: 'Ne mange pas de viande SAUF steak hache et blanc de poulet. Pas de poisson sauf si propose explicitement comme option. Privilegie oeufs, laitages 0%, legumineuses, tofu, fromage, whey.' };
       const r = await fetch(`${SUPABASE_URL}/functions/v1/coach`, {
         method: 'POST',
