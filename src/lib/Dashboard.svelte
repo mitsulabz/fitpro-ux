@@ -253,7 +253,10 @@
       });
       const cible = jd?.calories ?? 0;
       const extraKcal = dayData?.extraKcal ?? 0;
-      result.push({ key, label, foods, total, cible, extraKcal });
+      const sp = (foods as any[]).reduce((s: number, f: any) => s + (f.p||0), 0);
+      const sg = (foods as any[]).reduce((s: number, f: any) => s + (f.g||0), 0);
+      const sl = (foods as any[]).reduce((s: number, f: any) => s + (f.l||0), 0);
+      result.push({ key, label, foods, total, cible, extraKcal, p: sp, g: sg, l: sl });
       if (result.length >= 14) break;
     }
     return result;
@@ -263,7 +266,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.1";
+  const BUILD = "V5.2";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -579,12 +582,17 @@
   {#each recentDays() as day}
   <details class="card hist-card">
     <summary class="hist-summary">
-      <span class="hist-date">{day.label}</span>
-      <span class="hist-kcal" style="color:{day.cible > 0 ? (day.total <= day.cible ? 'var(--c-green)' : 'var(--c-red)') : 'var(--c-text2)'}">
-        {Math.round(day.total).toLocaleString('fr')} kcal
-      </span>
-      {#if day.cible > 0}
-      <span class="hist-cible">/ {Math.round(day.cible).toLocaleString('fr')}</span>
+      <div class="hist-top">
+        <span class="hist-date">{day.label}</span>
+        <span class="hist-kcal" style="color:{day.cible > 0 ? (day.total <= day.cible ? 'var(--c-green)' : 'var(--c-red)') : 'var(--c-text2)'}">
+          {Math.round(day.total).toLocaleString('fr')} kcal
+        </span>
+        {#if day.cible > 0}
+        <span class="hist-cible">/ {Math.round(day.cible).toLocaleString('fr')}</span>
+        {/if}
+      </div>
+      {#if day.foods.length}
+      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g</div>
       {/if}
     </summary>
     <div class="hist-foods">
@@ -692,7 +700,9 @@
 
 .section-label { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin:14px 0 8px; }
 .hist-card { padding:0; margin-bottom:6px; overflow:hidden; }
-.hist-summary { display:flex; align-items:center; gap:8px; padding:12px 14px; cursor:pointer; list-style:none; }
+.hist-summary { display:flex; flex-direction:column; gap:3px; padding:12px 14px; cursor:pointer; list-style:none; }
+.hist-top { display:flex; align-items:center; gap:8px; }
+.hist-macros { font-size:11px; color:var(--c-text3); }
 .hist-summary::-webkit-details-marker { display:none; }
 .hist-date { flex:1; font-size:13px; font-weight:500; color:var(--c-text); text-transform:capitalize; }
 .hist-kcal { font-size:13px; font-weight:600; flex-shrink:0; }
