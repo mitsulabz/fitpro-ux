@@ -229,7 +229,9 @@
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
-    await persist({ ...data, days: newDays, programme: { ...data.programme, jours: newJours } });
+    const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours } };
+    await persist(newData);
+    initDaySelections(newData); // re-synchronise l'etat local -> bouton "dirty" off + affichage coherent en 1 clic
   }
 
   // Y a-t-il des choix non encore appliques ?
