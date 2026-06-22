@@ -230,8 +230,15 @@
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
     const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours } };
-    await persist(newData);
-    initDaySelections(newData); // re-synchronise l'etat local -> bouton "dirty" off + affichage coherent en 1 clic
+    // MAJ UI synchrone (en 1 clic), sauvegarde reseau en arriere-plan
+    appData.set(newData);
+    initDaySelections(newData);
+    const s = get(session);
+    if (s) {
+      refreshToken(s.refresh_token)
+        .then((fresh) => { persistSession(fresh); saveAppState(fresh.access_token, s.user.id, newData); })
+        .catch(() => saveAppState(s.access_token, s.user.id, newData));
+    }
   }
 
   // Y a-t-il des choix non encore appliques ?
