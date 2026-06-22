@@ -198,60 +198,48 @@
     return bmr * (nf(actKey) || 1.4) + sportKcal;
   }
 
-  // Per-day override — recalculates the jour's calories/deficit
-  async function setDayActivity(ds: string, value: string) {
+  // Edition LOCALE uniquement : on memorise le choix. Le calcul + la sauvegarde se font au clic "Recalculer".
+  function setDaySelection(ds: string, value: string) {
     daySelections = { ...daySelections, [ds]: value };
-
-    const data = get(appData) as any;
-    const dayData = (data.days ?? {})[ds] ?? {};
-    const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
-    const progAct = value === '' ? false : { name: value, kcal: curActs[value] ?? 0 };
-    const newDays = { ...(data.days ?? {}), [ds]: { ...dayData, progActivity: progAct } };
-
-    // Recalculate programme jours
-    const jours: any[] = data.programme?.jours ?? [];
-    const bmr = calcBMR(data.profile ?? {});
-    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor); // plancher sante : jamais sous le BMR
-    const newJours = jours.map((j: any) => {
-      if (dsOf(j) !== ds) return j;
-      if (value === 'Libre') {
-        const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
-        return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
-      }
-      const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
-      const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
-      const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
-      const calories = tdee - deficit;
-      return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
-    });
-
-    await persist({ ...data, days: newDays, programme: { ...data.programme, jours: newJours } });
   }
 
-  // Recalcule TOUS les jours avec le profil + activites + regle BMR actuels
+  // Applique les choix (daySelections) + recalcule tous les jours + sauvegarde, EN UNE FOIS
   async function recalcAll() {
     const data = get(appData) as any;
     const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
     const jours: any[] = data.programme?.jours ?? [];
     const bmr = calcBMR(data.profile ?? {});
+    const actKey = data.profile?.act ?? '1.40';
     const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
     const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const newDays = { ...(data.days ?? {}) };
     const newJours = jours.map((j: any) => {
       const ds = dsOf(j);
-      const value = selectionFor(data, j, ds);
+      const value = daySelections[ds] ?? selectionFor(data, j, ds); // choix en attente, sinon etat courant
+      // applique le choix sur le jour (progActivity = source de verite)
+      const progAct = value === '' ? false : { name: value, kcal: value === 'Libre' ? 0 : (curActs[value] ?? 0) };
+      newDays[ds] = { ...(newDays[ds] ?? {}), progActivity: progAct };
       if (value === 'Libre') {
-        const brulees = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', 0));
+        const brulees = Math.round(calcTDEE(bmr, actKey, 0));
         return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
       }
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
-      const tdee = Math.round(calcTDEE(bmr, data.profile?.act ?? '1.40', sportKcal));
+      const tdee = Math.round(calcTDEE(bmr, actKey, sportKcal));
       const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
-    await persist({ ...data, programme: { ...data.programme, jours: newJours } });
+    await persist({ ...data, days: newDays, programme: { ...data.programme, jours: newJours } });
   }
+
+  // Y a-t-il des choix non encore appliques ?
+  const dirty = $derived.by(() => {
+    const data = $appData as any;
+    return progJours.some((j: any) => {
+      const ds = dsOf(j);
+      return (daySelections[ds] ?? '') !== selectionFor(data, j, ds);
+    });
+  });
 
   function isToday(j: any) { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()===todayDate.getTime(); }
   function isPast(j: any)  { const d=parseJour(j.jour); if(!d)return false; d.setHours(0,0,0,0); return d.getTime()<todayDate.getTime(); }
@@ -332,7 +320,7 @@
   {:else}
     <div class="jours-head">
       <span class="section-title-flat">Jours du programme</span>
-      <button class="recalc-btn" onclick={recalcAll}>↻ Recalculer</button>
+      <button class="recalc-btn" class:dirty onclick={recalcAll}>↻ Recalculer{#if dirty} •{/if}</button>
     </div>
     <div class="jour-list">
       {#each progJours as j, i}
@@ -340,7 +328,7 @@
       {@const eaten = getEaten(j)}
       {@const today = isToday(j)}
       {@const past = isPast(j)}
-      {@const actName = (j.activity ?? daySelections[ds] ?? '')}
+      {@const actName = selectionFor($appData, j, ds)}
       {@const sportK = (actName && actName !== 'Libre') ? (acts[actName] ?? 0) : 0}
       {@const exp = Math.round(bmrLive * nf(profile.act) + sportK + ((days as any)[ds]?.extraKcal ?? 0))}
       {@const realDef = exp - eaten}
@@ -350,8 +338,8 @@
           <div class="jour-name">{j.jour}</div>
           <!-- Sélecteur activité du jour -->
           <select class="jour-act-sel"
-            value={selectionFor($appData, j, ds)}
-            onchange={(e) => setDayActivity(ds, (e.target as HTMLSelectElement).value)}
+            value={daySelections[ds] ?? ''}
+            onchange={(e) => setDaySelection(ds, (e.target as HTMLSelectElement).value)}
           >
             <option value="">Régime sans sport</option>
             <option value="Libre">Libre — journée neutre</option>
@@ -453,4 +441,6 @@
   .proj-val { font-size:24px; font-weight:700; color:var(--c-accent); letter-spacing:-0.5px; }
   .proj-lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--c-text3); margin-top:2px; }
   .proj-sub { text-align:center; }
+
+  .recalc-btn.dirty { background:var(--c-accent); color:var(--c-accent-fg); }
 </style>
