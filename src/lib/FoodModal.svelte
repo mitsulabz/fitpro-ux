@@ -78,7 +78,10 @@
 
     const newData = { ...data, favorites: favs, days: { ...days, [dayKey]: { ...day, foods } } };
     appData.set(newData);
-    saveAppState(s.access_token, s.user.id, newData);
+    // Rafraichit le jeton avant de sauvegarder (sinon, fenetre ouverte longtemps -> jeton expire -> perte de donnees)
+    let token = s.access_token;
+    try { const fresh = await refreshToken(s.refresh_token); persistSession(fresh); token = fresh.access_token; } catch {}
+    await saveAppState(token, s.user.id, newData);
     if (closeAfter) onclose();
   }
 
