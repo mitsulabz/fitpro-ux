@@ -77,11 +77,12 @@
     }
 
     const newData = { ...data, favorites: favs, days: { ...days, [dayKey]: { ...day, foods } } };
-    appData.set(newData);
-    // Rafraichit le jeton avant de sauvegarder (sinon, fenetre ouverte longtemps -> jeton expire -> perte de donnees)
+    appData.set(newData); // affichage immediat
+    // Rafraichit le jeton UNIQUEMENT pour la sauvegarde (pas de persistSession -> pas de rechargement cloud qui ecraserait l'ajout)
     let token = s.access_token;
-    try { const fresh = await refreshToken(s.refresh_token); persistSession(fresh); token = fresh.access_token; } catch {}
+    try { const fresh = await refreshToken(s.refresh_token); token = fresh.access_token; } catch {}
     await saveAppState(token, s.user.id, newData);
+    appData.set(newData); // re-affirme l'etat local au cas ou
     if (closeAfter) onclose();
   }
 
