@@ -265,7 +265,14 @@
       const sp = (foods as any[]).reduce((s: number, f: any) => s + (f.p||0), 0);
       const sg = (foods as any[]).reduce((s: number, f: any) => s + (f.g||0), 0);
       const sl = (foods as any[]).reduce((s: number, f: any) => s + (f.l||0), 0);
-      result.push({ key, label, foods, total, cible, extraKcal, p: sp, g: sg, l: sl });
+      // deficit reel du jour = depense - mange
+      const act = jd ? actOf(jd, key) : '';
+      const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
+      const tdee = Math.round(bmrOf(profile) * (nfp(profile.act) || 1.4) + sportK);
+      const expend = tdee + extraKcal;
+      const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
+      const neutre = act === 'Libre';
+      result.push({ key, label, foods, total, cible, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
       if (result.length >= 14) break;
     }
     return result;
@@ -275,7 +282,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.9";
+  const BUILD = "V6.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -595,7 +602,7 @@
         {/if}
       </div>
       {#if day.foods.length}
-      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g</div>
+      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{/if}</div>
       {/if}
     </summary>
     <div class="hist-foods">
