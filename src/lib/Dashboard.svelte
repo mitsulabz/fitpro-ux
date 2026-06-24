@@ -230,6 +230,8 @@
 
   // retard = how many kcal short of the plan (positive = behind, negative = ahead)
   const retard = $derived(expectedDeficit + cumul);
+  // Cumul reel = identique a la barre (deficit live, J1, jour en cours au prorata)
+  const cumulReal = $derived(-Math.round(progStats.realBrule));
 
   const recentDays = $derived(() => {
     const result: any[] = [];
@@ -286,7 +288,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.2";
+  const BUILD = "V6.3";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -640,8 +642,8 @@
   <div class="stats-row">
     <div class="card stat-card">
       <div class="label">{$t.dashboard.cumul}</div>
-      <div class="value-accent" style="color:{cumul <= 0 ? 'var(--c-accent)' : 'var(--c-red)'}">
-        {fmt(cumul)}
+      <div class="value-accent" style="color:{cumulReal <= 0 ? 'var(--c-accent)' : 'var(--c-red)'}">
+        {fmt(cumulReal)}
       </div>
       <div class="caption">{$t.dashboard.since_start}</div>
     </div>
