@@ -360,7 +360,7 @@
         <div class="jour-right">
           {#if today}
             <div class="jour-tag">aujourd'hui</div>
-            <div class="jour-metric"><span class="jm-lbl">cible</span> {intakeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">dépense</span> {tdeeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {:else if past && eaten > 0}
             <div class="jour-metric">
               <span class="jm-lbl">mangé</span>
@@ -369,7 +369,7 @@
           {:else if past}
             <div class="jour-metric"><span class="jm-lbl">mangé</span> <span class="muted">—</span></div>
           {:else}
-            <div class="jour-metric"><span class="jm-lbl">cible</span> {intakeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">dépense</span> {tdeeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {/if}
           {#if past && eaten > 0}
             <div class="jour-def caption" style="color:{realDef >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">

@@ -50,6 +50,12 @@
   const progDay = $derived(progIdx >= 0 ? progJours[progIdx] : null);
   const tBrulees = $derived((progDay?.calories_brulees ?? 0) + (today?.extraKcal ?? 0));
   const tIntake = $derived(progDay?.calories ?? 0);
+  const tdeeToday = $derived.by(() => {
+    const bmr = bmrOf(profile); const actF = nfp(profile.act) || 1.4;
+    const act = progDay ? actOf(progDay, todayKey) : '';
+    const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
+    return Math.round(bmr * actF + sportK + (today?.extraKcal ?? 0));
+  });
   const deficit = $derived(Math.round(macros.k) - tBrulees);
   const mCible = $derived.by(() => {
     const w = parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100;
@@ -291,7 +297,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.6";
+  const BUILD = "V6.7";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -477,7 +483,7 @@
       <div class="label">Journée à</div>
       {#if tIntake > 0}
         {@const reste = tIntake - macros.k}
-        <div class="hero-num" style="color:var(--c-text)">{Math.round(tIntake).toLocaleString('fr')}<span class="hero-unit">kcal</span></div>
+        <div class="hero-num" style="color:var(--c-text)">{Math.round(tIntake).toLocaleString('fr')}<span class="hero-unit"> / {tdeeToday.toLocaleString('fr')} kcal</span></div>
         <div class="caption hero-eat-sub" style="margin-top:6px">
           {reste >= 0 ? `reste ${Math.round(reste).toLocaleString('fr')} kcal à manger` : `dépassé de ${Math.round(-reste).toLocaleString('fr')} kcal`}
         </div>
