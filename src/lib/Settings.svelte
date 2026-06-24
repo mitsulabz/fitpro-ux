@@ -51,7 +51,7 @@
     if (!s || !data) return;
     profileStatus = 'Sauvegarde…';
     const newData = { ...data, profile: { ...(data.profile ?? {}),
-      weight: pf.weight, bf: pf.bf, bft: pf.bft, height: pf.height, age: pf.age, sex: pf.sex, act: pf.act } };
+      weight: pf.weight, bf: pf.bf, bft: pf.bft, height: pf.height, age: pf.age, sex: pf.sex } };
     appData.set(newData);
     try { await saveAppState(s.access_token, s.user.id, newData); profileStatus = '✓ Profil enregistré'; }
     catch { profileStatus = 'Erreur de sauvegarde'; }
@@ -129,7 +129,6 @@
     <label class="pf-row"><span>Taille (cm)</span><input type="number" bind:value={pf.height} /></label>
     <label class="pf-row"><span>Âge</span><input type="number" bind:value={pf.age} /></label>
     <label class="pf-row"><span>Sexe</span><select bind:value={pf.sex}><option value="h">Homme</option><option value="f">Femme</option></select></label>
-    <label class="pf-row"><span>Facteur d'activité</span><input type="number" inputmode="decimal" step="0.05" bind:value={pf.act} /></label>
     <button class="card save-btn" onclick={saveProfile}>Enregistrer le profil</button>
     {#if profileStatus}<div class="import-status" class:success={profileStatus.startsWith('✓')}>{profileStatus}</div>{/if}
   </div>
@@ -173,7 +172,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V5.4</div>
+  <div class="version caption">FitProX · V5.5</div>
 </div>
 
 <style>
