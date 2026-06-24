@@ -105,7 +105,9 @@
       const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
       if (jd0.getTime() === todayDate.getTime()) {
         // jour en cours : prorata horaire (depense au prorata de l'heure - mange jusqu'a maintenant)
-        realBrule += (tdee * dayFrac + (dd.extraKcal ?? 0)) - eaten;
+        // metabolisme de base au prorata de l'heure ; activite du jour (ex. escrime) + sport sup. comptes en entier ; - mange aujourd'hui
+        const baseDay = bmr * actF;
+        realBrule += (Math.round(baseDay * dayFrac) + sportK + (dd.extraKcal ?? 0)) - eaten;
       }
       if (jd0 < todayDate && eaten > 0) {
         const def = (tdee + (dd.extraKcal ?? 0)) - eaten;
@@ -288,7 +290,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.3";
+  const BUILD = "V6.4";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
