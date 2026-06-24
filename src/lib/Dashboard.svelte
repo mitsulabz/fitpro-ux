@@ -89,7 +89,7 @@
     const pTargetDay = 1.6 * w; // g de proteines/jour pour preserver le muscle
     const sexFloor = profile.sex === 'f' ? 1200 : 1500;
     const minIntake = Math.max(Math.round(bmr), sexFloor);
-    let totalCible = 0, realBrule = 0;
+    let totalCible = 0, realBrule = 0, expectedSoFar = 0;
     let fatKcal = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
@@ -107,10 +107,12 @@
         // jour en cours : prorata horaire (depense au prorata de l'heure - mange jusqu'a maintenant)
         // depense du jour (base + activite du jour) au prorata de l'heure ; sport sup. compte en entier ; - mange aujourd'hui
         realBrule += (Math.round(tdee * dayFrac) + (dd.extraKcal ?? 0)) - eaten;
+        expectedSoFar += cible * dayFrac;
       }
       if (jd0 < todayDate && eaten > 0) {
         const def = (tdee + (dd.extraKcal ?? 0)) - eaten;
         realBrule += def;
+        expectedSoFar += cible;
         if (def > 0) {
           const pDay = fds.reduce((s: number, f: any) => s + (f.p||0), 0);
           const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, pDay / pTargetDay)) : 1;
@@ -125,7 +127,7 @@
     });
     const fatShare = defKcalPos > 0 ? fatKcal / defKcalPos : 0.9;
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
-    return { totalCible, realBrule, fatKcal, fatShare, protPct, defKcalPos, protShortfall };
+    return { totalCible, realBrule, expectedSoFar, fatKcal, fatShare, protPct, defKcalPos, protShortfall };
   });
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
@@ -230,7 +232,7 @@
   }, 0));
 
   // retard = how many kcal short of the plan (positive = behind, negative = ahead)
-  const retard = $derived(expectedDeficit + cumul);
+  const retard = $derived(Math.round(progStats.expectedSoFar - progStats.realBrule));
   // Cumul reel = identique a la barre (deficit live, J1, jour en cours au prorata)
   const cumulReal = $derived(-Math.round(progStats.realBrule));
 
@@ -289,7 +291,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.5";
+  const BUILD = "V6.6";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
