@@ -50,8 +50,10 @@
   const deficit = $derived(Math.round(macros.k) - tBrulees);
   const mCible = $derived.by(() => {
     const w = parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100;
+    const bf = parseFloat(String(($appData as any)?.profile?.bf ?? '').replace(',', '.')) || 0;
+    const lean = bf > 0 ? w * (1 - bf / 100) : w * 0.75; // masse maigre
     const kcal = tIntake > 0 ? tIntake : 1850; // repli si pas de cible du jour
-    const p = Math.round(1.9 * w);
+    const p = Math.round(2.2 * lean); // 2,2 g/kg de masse maigre (anti-fonte, contexte cortisone)
     const l = Math.round(0.6 * w);
     const g = Math.max(0, Math.round((kcal - p * 4 - l * 9) / 4));
     return { p, g, l };
@@ -266,7 +268,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.5";
+  const BUILD = "V5.6";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
