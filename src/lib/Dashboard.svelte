@@ -25,6 +25,9 @@
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
   const todayKey = todayDate.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const nowD = new Date();
+  const dayFrac = Math.min(1, (nowD.getHours() * 60 + nowD.getMinutes()) / (24 * 60));
+  const heureLabel = nowD.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   const prog = $derived(($appData as any)?.programme ?? {});
   const progJours = $derived(prog?.jours ?? []);
@@ -100,6 +103,10 @@
       const fds = dd.foods ?? [];
       const eaten = fds.reduce((s: number, f: any) => s + (f.k||0), 0);
       const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
+      if (jd0.getTime() === todayDate.getTime()) {
+        // jour en cours : prorata horaire (depense au prorata de l'heure - mange jusqu'a maintenant)
+        realBrule += (tdee * dayFrac + (dd.extraKcal ?? 0)) - eaten;
+      }
       if (jd0 < todayDate && eaten > 0) {
         const def = (tdee + (dd.extraKcal ?? 0)) - eaten;
         realBrule += def;
@@ -268,7 +275,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.8";
+  const BUILD = "V5.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -429,7 +436,7 @@
   <div class="header">
     <div>
       <div class="label">{$t.dashboard.today}</div>
-      <div class="date">{dateLabel}<span class="build-tag">{BUILD}</span></div>
+      <div class="date">{dateLabel} <span class="heure-tag">{heureLabel}</span><span class="build-tag">{BUILD}</span></div>
     </div>
     <div class="app-title">FitPro<span class="x">X</span></div>
   </div>
@@ -750,4 +757,6 @@
   .sos-btn { width:100%; border:2px solid var(--c-blue); background:transparent; color:var(--c-blue); border-radius:var(--r-md); padding:16px; font-weight:700; font-size:15px; cursor:pointer; font-family:var(--font); }
   .sos-btn:disabled { opacity:.6; cursor:not-allowed; }
   :global(html[data-theme='light']) .sos-btn { background:#BBEFFF; border-color:#BBEFFF; color:#1a1a1a; }
+
+  .heure-tag { font-size:14px; font-weight:400; color:var(--c-text2); letter-spacing:0; }
 </style>
