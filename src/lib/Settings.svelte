@@ -126,7 +126,6 @@
   <div class="section profile-form">
     <label class="pf-row"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.weight} /></label>
     <label class="pf-row"><span>Masse grasse (%)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.bf} /></label>
-    <label class="pf-row"><span>Objectif MG (%)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.bft} /></label>
     <label class="pf-row"><span>Taille (cm)</span><input type="number" bind:value={pf.height} /></label>
     <label class="pf-row"><span>Âge</span><input type="number" bind:value={pf.age} /></label>
     <label class="pf-row"><span>Sexe</span><select bind:value={pf.sex}><option value="h">Homme</option><option value="f">Femme</option></select></label>
@@ -174,7 +173,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V5.3</div>
+  <div class="version caption">FitProX · V5.4</div>
 </div>
 
 <style>
