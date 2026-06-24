@@ -268,7 +268,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V5.7";
+  const BUILD = "V5.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -444,12 +444,6 @@
       <div class="progress-fill" style="width:{progressPct}%"></div>
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
-    {#if fatLost}
-      <div class="caption" style="margin-top:6px"><strong>Macro réel :</strong> {fmtG(fatLost.g)} de gras et {fmtG(fatLost.realMuscleG)} de muscle perdus</div>
-      {#if proj}<div class="caption fat-note">au {proj.endStr} : ~{proj.wR} kg · {proj.bfR}% MG</div>{/if}
-      <div class="caption" style="margin-top:4px"><strong>Macro optimal :</strong> {fmtG(fatLost.idealG)} de gras et 0 g de muscle perdu</div>
-      {#if proj}<div class="caption fat-note">au {proj.endStr} : ~{proj.wO} kg · {proj.bfO}% MG</div>{/if}
-    {/if}
   </div>
   {/if}
 
