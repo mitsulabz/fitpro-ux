@@ -286,7 +286,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.1";
+  const BUILD = "V6.2";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -455,7 +455,7 @@
   {#if totalDays > 0}
   <div class="card progress-card">
     <div class="prog-top">
-      <span class="label">{$t.dashboard.progress}</span>
+      <span class="label">{$t.dashboard.progress}{#if dayNum} · J{dayNum} / J{totalDays}{/if}</span>
       <span class="badge-accent">{progressPct}%</span>
     </div>
     <div class="progress-bar" style="margin-top:10px">
