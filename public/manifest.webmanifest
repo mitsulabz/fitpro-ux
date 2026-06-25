@@ -2,13 +2,13 @@
   "name": "FitProX",
   "short_name": "FitProX",
   "description": "Suivi nutrition & programme sportif",
-  "start_url": "/fitpro-ux/",
-  "scope": "/fitpro-ux/",
+  "start_url": "/fitprox/",
+  "scope": "/fitprox/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0d0d0d",
   "theme_color": "#0d0d0d",
   "icons": [
-    { "src": "/fitpro-ux/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "/fitprox/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }
