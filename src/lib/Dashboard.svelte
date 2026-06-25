@@ -270,11 +270,13 @@
       const foods = dayData?.foods ?? [];
       const total = (foods as any[]).reduce((s: number, f: any) => s + (f.k||0), 0);
       const label = d.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
-      const jd = progJours.find((j: any) => {
+      const jIdx = progJours.findIndex((j: any) => {
         const pd = parseJour(j.jour);
         if (!pd) return false;
         return pd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }) === key;
       });
+      const jd = jIdx >= 0 ? progJours[jIdx] : null;
+      const jNum = jIdx >= 0 ? jIdx + 1 : null;
       const cible = jd?.calories ?? 0;
       const extraKcal = dayData?.extraKcal ?? 0;
       const sp = (foods as any[]).reduce((s: number, f: any) => s + (f.p||0), 0);
@@ -287,7 +289,7 @@
       const expend = tdee + extraKcal;
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
       const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
-      result.push({ key, label, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
+      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
       if (result.length >= 14) break;
     }
     return result;
@@ -297,7 +299,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.9";
+  const BUILD = "V7.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -608,7 +610,7 @@
   <details class="card hist-card">
     <summary class="hist-summary">
       <div class="hist-top">
-        <span class="hist-date">{day.label}</span>
+        <span class="hist-date">{day.label}{#if day.jNum} (J{day.jNum}){/if}</span>
         <span class="hist-kcal" style="color:{day.foods.length ? (day.total <= day.expend ? 'var(--c-green)' : 'var(--c-red)') : 'var(--c-text2)'}">
           {Math.round(day.total).toLocaleString('fr')} kcal
         </span>
