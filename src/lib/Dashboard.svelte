@@ -286,7 +286,7 @@
       const tdee = Math.round(bmrOf(profile) * (nfp(profile.act) || 1.4) + sportK);
       const expend = tdee + extraKcal;
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
-      const neutre = act === 'Libre';
+      const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
       result.push({ key, label, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
       if (result.length >= 14) break;
     }
@@ -297,7 +297,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.8";
+  const BUILD = "V6.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
