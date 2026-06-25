@@ -287,7 +287,7 @@
       const expend = tdee + extraKcal;
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
       const neutre = act === 'Libre';
-      result.push({ key, label, foods, total, cible, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
+      result.push({ key, label, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
       if (result.length >= 14) break;
     }
     return result;
@@ -297,7 +297,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V6.7";
+  const BUILD = "V6.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -609,11 +609,11 @@
     <summary class="hist-summary">
       <div class="hist-top">
         <span class="hist-date">{day.label}</span>
-        <span class="hist-kcal" style="color:{day.cible > 0 ? (day.total <= day.cible ? 'var(--c-green)' : 'var(--c-red)') : 'var(--c-text2)'}">
+        <span class="hist-kcal" style="color:{day.foods.length ? (day.total <= day.expend ? 'var(--c-green)' : 'var(--c-red)') : 'var(--c-text2)'}">
           {Math.round(day.total).toLocaleString('fr')} kcal
         </span>
-        {#if day.cible > 0}
-        <span class="hist-cible">/ {Math.round(day.cible).toLocaleString('fr')}</span>
+        {#if day.foods.length}
+        <span class="hist-cible">/ {Math.round(day.expend).toLocaleString('fr')}</span>
         {/if}
       </div>
       {#if day.foods.length}
