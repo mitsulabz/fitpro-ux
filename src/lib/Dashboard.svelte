@@ -299,7 +299,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V7.4";
+  const BUILD = "V7.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -316,6 +316,26 @@
     const newData = { ...data, days: { ...data.days, [dayKey]: { ...dayData, extraKcal: kcal } } };
     appData.set(newData);
     saveAppState(s.access_token, s.user.id, newData);
+  }
+
+  const SUPPS = [
+    { key: 'folic', label: 'Folic Expert' },
+    { key: 'omega3', label: 'Oméga 3' },
+    { key: 'b12', label: 'B12' },
+    { key: 'mag1', label: 'Magnésium 1' },
+    { key: 'mag2', label: 'Magnésium 2' },
+  ];
+  async function toggleSupp(key: string) {
+    const s = get(session); const data = get(appData) as any;
+    if (!s || !data) return;
+    const dayData = data.days?.[todayKey] ?? {};
+    const supps = { ...(dayData.supps ?? {}) };
+    supps[key] = !supps[key];
+    const newData = { ...data, days: { ...data.days, [todayKey]: { ...dayData, supps } } };
+    appData.set(newData);
+    let token = s.access_token;
+    try { const fresh = await refreshToken(s.refresh_token); token = fresh.access_token; } catch {}
+    await saveAppState(token, s.user.id, newData);
   }
 
   async function removeFood(idx: number, dayKey: string = todayKey) {
@@ -601,6 +621,11 @@
       />
       <span class="sport-extra-unit">kcal brûlées</span>
     </div>
+    <div class="supp-row">
+      {#each SUPPS as sp}
+        <button class="supp-chip" class:on={today?.supps?.[sp.key]} onclick={() => toggleSupp(sp.key)}><span class="supp-box">{today?.supps?.[sp.key] ? '✓' : ''}</span> {sp.label}</button>
+      {/each}
+    </div>
   </div>
 
 
@@ -783,4 +808,10 @@
   :global(html[data-theme='light']) .sos-btn { background:#BBEFFF; border-color:#BBEFFF; color:#1a1a1a; }
 
   .heure-tag { font-size:14px; font-weight:400; color:var(--c-text2); letter-spacing:0; }
+
+.supp-row { display:flex; flex-wrap:wrap; gap:6px; border-top:0.5px solid var(--c-border); margin-top:8px; padding-top:10px; }
+.supp-chip { display:flex; align-items:center; gap:5px; border:0.5px solid var(--c-border); background:var(--c-bg); color:var(--c-text2); border-radius:20px; padding:5px 10px; font-size:12px; cursor:pointer; font-family:var(--font); }
+.supp-chip.on { background:var(--c-green); border-color:var(--c-green); color:#fff; }
+.supp-box { width:14px; height:14px; border-radius:4px; border:1px solid currentColor; display:inline-flex; align-items:center; justify-content:center; font-size:10px; line-height:1; flex-shrink:0; }
+.supp-chip.on .supp-box { background:#fff; color:var(--c-green); border-color:#fff; }
 </style>
