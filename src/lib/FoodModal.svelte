@@ -29,6 +29,7 @@
   let searching = $state(false);
   let offResults = $state<OFFProd[]>([]);
   let quantities = $state<Record<number, number>>({});
+  let favQty = $state<Record<number, number>>({});
 
   // Manuel
   let manName = $state('');
@@ -59,7 +60,7 @@
     return (name ?? '').trim().toLowerCase() + '|' + (per ?? '100');
   }
 
-  async function commitFood(food: Food, closeAfter = true) {
+  async function commitFood(food: Food, closeAfter = true, skipFav = false) {
     const s = get(session);
     const data = get(appData) as any;
     if (!s || !data) return;
@@ -69,11 +70,13 @@
     const foods = Array.isArray(day.foods) ? [...day.foods] : [];
     foods.push({ n: food.n, k: Math.round(food.k), p: +food.p.toFixed(1), g: +food.g.toFixed(1), l: +food.l.toFixed(1) });
 
-    // Auto-add to favorites
+    // Auto-add to favorites (sauf si l'aliment vient déjà des favoris)
     const favs: any[] = Array.isArray(data.favorites) ? [...data.favorites] : [];
-    const key = favKey(food.n, '100');
-    if (!favs.some((f: any) => favKey(f.name, f.per) === key)) {
-      favs.unshift({ name: food.n, per: '100', kcal: Math.round(food.k), p: +food.p.toFixed(1), g: +food.g.toFixed(1), l: +food.l.toFixed(1), img: '' });
+    if (!skipFav) {
+      const key = favKey(food.n, '100');
+      if (!favs.some((f: any) => favKey(f.name, f.per) === key)) {
+        favs.unshift({ name: food.n, per: '100', kcal: Math.round(food.k), p: +food.p.toFixed(1), g: +food.g.toFixed(1), l: +food.l.toFixed(1), img: '' });
+      }
     }
 
     const newData = { ...data, favorites: favs, days: { ...days, [dayKey]: { ...day, foods } } };
@@ -86,8 +89,12 @@
     if (closeAfter) onclose();
   }
 
-  function addFromFav(fav: any) {
-    commitFood({ n: fav.name, k: fav.kcal ?? 0, p: fav.p ?? 0, g: fav.g ?? 0, l: fav.l ?? 0 });
+  function addFromFav(fav: any, qty: number = 1) {
+    const n = Math.max(1, Math.round(qty || 1));
+    commitFood({
+      n: n > 1 ? `${fav.name} ×${n}` : fav.name,
+      k: (fav.kcal ?? 0) * n, p: (fav.p ?? 0) * n, g: (fav.g ?? 0) * n, l: (fav.l ?? 0) * n,
+    }, true, true);
   }
 
   function addOFF(prod: OFFProd, idx: number, qty: number) {
@@ -248,14 +255,21 @@
         {#if favorites.length === 0}
           <div class="empty">Aucun favori. Ajoute des aliments via Recherche, Scan ou IA.</div>
         {:else}
-          {#each favorites as fav}
-            <button class="food-row fav-btn" onclick={() => addFromFav(fav)}>
+          {#each favorites as fav, i}
+            <div class="food-row">
               <div class="food-info">
                 <span class="food-name">{fav.name}</span>
                 <span class="food-macros">{Math.round(fav.kcal ?? 0)} kcal · P {+(fav.p??0).toFixed(1)}g · G {+(fav.g??0).toFixed(1)}g · L {+(fav.l??0).toFixed(1)}g <span class="muted">{fav.per === 'unit' ? '/portion' : '/100g'}</span></span>
               </div>
-              <span class="add-icon">+</span>
-            </button>
+              <div class="qty-row">
+                <input type="number" min="1" max="50" step="1"
+                  value={favQty[i] ?? 1}
+                  oninput={(e) => { favQty = { ...favQty, [i]: +(e.target as HTMLInputElement).value }; }}
+                />
+                <span class="muted">×</span>
+                <button class="btn-add" onclick={() => addFromFav(fav, favQty[i] ?? 1)}>+</button>
+              </div>
+            </div>
           {/each}
         {/if}
 
