@@ -253,33 +253,71 @@
     }
   }
 
+  // Recalcule jours + days pour une selection donnée (sans sauvegarde)
+  function computeProgram(data: any, selMap: Record<string, string>) {
+    const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
+    const jours: any[] = data.programme?.jours ?? [];
+    const bmr = calcBMR(data.profile ?? {});
+    const actKey = data.profile?.act ?? '1.40';
+    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const newDays = { ...(data.days ?? {}) };
+    const newJours = jours.map((j: any) => {
+      const ds = dsOf(j);
+      const value = selMap[ds] ?? selectionFor(data, j, ds);
+      const progAct = value === '' ? false : { name: value, kcal: value === 'Libre' ? 0 : (curActs[value] ?? 0) };
+      newDays[ds] = { ...(newDays[ds] ?? {}), progActivity: progAct };
+      if (value === 'Libre') {
+        const brulees = Math.round(calcTDEE(bmr, actKey, 0));
+        return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
+      }
+      const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
+      const tdee = Math.round(calcTDEE(bmr, actKey, sportKcal));
+      const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
+      const calories = tdee - deficit;
+      return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
+    });
+    return { newDays, newJours };
+  }
+
   // Bascule entre les 3 programmes (chill / classique / hardcore)
   async function selectProgram(id: string) {
     if (id === activeProg) return;
     clearTimeout(_saveTimer);
-    await recalcAll(); // sauve le programme courant (jours + progSel[actif])
     const data = get(appData) as any;
     const jours: any[] = data.programme?.jours ?? [];
-    const progSel = { ...(data.programme?.progSel ?? {}) };
-    // selections cibles : celles du programme demandé, sinon clone du programme courant
-    let targetSel: Record<string, string> | undefined = progSel[id];
-    if (!targetSel) {
-      targetSel = {};
-      jours.forEach((j: any) => { const ds = dsOf(j); if (ds) targetSel![ds] = selectionFor(data, j, ds); });
-    }
-    // active le nouveau programme, puis applique ses choix sur les jours
-    appData.set({ ...data, programme: { ...data.programme, active: id } });
+    // 1. fige la selection courante (choix en attente sinon etat des jours)
+    const curSel: Record<string, string> = {};
+    jours.forEach((j: any) => { const ds = dsOf(j); if (ds) curSel[ds] = daySelections[ds] ?? selectionFor(data, j, ds); });
+    const progSel = { ...(data.programme?.progSel ?? {}), [activeProg]: curSel };
+    // 2. selection cible : celle du programme demandé, sinon clone du courant
+    const targetSel: Record<string, string> = progSel[id] ?? { ...curSel };
+    // 3. recompute pour la cible
+    const { newDays, newJours } = computeProgram(data, targetSel);
+    const finalProgSel = { ...progSel, [id]: targetSel };
+    const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours, progSel: finalProgSel, active: id } };
+    // une seule ecriture synchrone + sauvegarde SANS persistSession (sinon rechargement cloud qui ecrase)
+    appData.set(newData);
+    _suppressSave = true;
     daySelections = { ...targetSel };
-    await recalcAll();
+    saveStatus = '✓ Enregistré';
+    const s = get(session);
+    if (s) {
+      let token = s.access_token;
+      try { const fresh = await refreshToken(s.refresh_token); token = fresh.access_token; } catch {}
+      saveAppState(token, s.user.id, newData);
+    }
   }
 
   // Enregistrement automatique (debounce) quand les choix changent
   let saveStatus = $state('');
   let _firstSave = true;
+  let _suppressSave = false;
   let _saveTimer: any;
   $effect(() => {
     JSON.stringify(daySelections); // dependance reactive
     if (_firstSave) { _firstSave = false; return; }
+    if (_suppressSave) { _suppressSave = false; return; }
     clearTimeout(_saveTimer);
     saveStatus = 'Enregistrement…';
     _saveTimer = setTimeout(() => recalcAll(), 1000);
