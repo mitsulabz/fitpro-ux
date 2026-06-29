@@ -43,6 +43,12 @@
   const days     = $derived(($appData as any)?.days ?? {});
   const profile  = $derived(($appData as any)?.profile ?? {});
   const acts     = $derived((prog?.activites ?? {}) as Record<string, number>);
+  const PROGRAMS = [
+    { id: 'chill', label: 'Chill' },
+    { id: 'classique', label: 'Classique' },
+    { id: 'hardcore', label: 'Hardcore' },
+  ];
+  const activeProg = $derived((prog?.active as string) ?? 'classique');
 
   const currentAct = $derived(profile?.act ?? '1.30');
   const bmrLive = $derived(calcBMR(profile));
@@ -230,7 +236,12 @@
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
     });
-    const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours } };
+    // sauvegarde la selection d'activite par jour pour le programme actif
+    const selMap: Record<string, string> = {};
+    jours.forEach((j: any) => { const ds = dsOf(j); if (ds) selMap[ds] = daySelections[ds] ?? selectionFor(data, j, ds); });
+    const active = (data.programme?.active as string) ?? 'classique';
+    const progSel = { ...(data.programme?.progSel ?? {}), [active]: selMap };
+    const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours, progSel } };
     // MAJ UI synchrone (en 1 clic), sauvegarde reseau en arriere-plan
     appData.set(newData);
     saveStatus = '✓ Enregistré';
@@ -240,6 +251,26 @@
         .then((fresh) => { persistSession(fresh); saveAppState(fresh.access_token, s.user.id, newData); })
         .catch(() => saveAppState(s.access_token, s.user.id, newData));
     }
+  }
+
+  // Bascule entre les 3 programmes (chill / classique / hardcore)
+  async function selectProgram(id: string) {
+    if (id === activeProg) return;
+    clearTimeout(_saveTimer);
+    await recalcAll(); // sauve le programme courant (jours + progSel[actif])
+    const data = get(appData) as any;
+    const jours: any[] = data.programme?.jours ?? [];
+    const progSel = { ...(data.programme?.progSel ?? {}) };
+    // selections cibles : celles du programme demandé, sinon clone du programme courant
+    let targetSel: Record<string, string> | undefined = progSel[id];
+    if (!targetSel) {
+      targetSel = {};
+      jours.forEach((j: any) => { const ds = dsOf(j); if (ds) targetSel![ds] = selectionFor(data, j, ds); });
+    }
+    // active le nouveau programme, puis applique ses choix sur les jours
+    appData.set({ ...data, programme: { ...data.programme, active: id } });
+    daySelections = { ...targetSel };
+    await recalcAll();
   }
 
   // Enregistrement automatique (debounce) quand les choix changent
@@ -279,6 +310,11 @@
         <div class="proj-item"><div class="proj-val">{endProj.bf}%</div><div class="proj-lbl">Masse grasse</div></div>
       </div>
       <div class="caption proj-sub">−{endProj.lost} kg de gras · historique réel + cibles du programme</div>
+      <div class="prog-switch">
+        {#each PROGRAMS as pg}
+          <button class="prog-cell" class:active={activeProg === pg.id} onclick={() => selectProgram(pg.id)}>{pg.label}</button>
+        {/each}
+      </div>
     </div>
   </div>
   {/if}
@@ -398,6 +434,9 @@
 .section-title-flat { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin:8px 0 8px; }
 .section-hint { font-size:13px; color:var(--c-text2); margin:0; }
 
+.prog-switch { display:flex; gap:6px; margin-top:12px; }
+.prog-cell { flex:1; padding:9px 4px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text2); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); transition:background .15s, color .15s; }
+.prog-cell.active { background:var(--c-accent); color:var(--c-accent-fg); border-color:var(--c-accent); }
 .act-select { width:100%; padding:10px 12px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text); font-size:13px; font-family:var(--font); }
 .act-select:focus { outline:none; border-color:var(--c-accent); }
 
