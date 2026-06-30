@@ -49,6 +49,12 @@
     { id: 'hardcore', label: 'Hardcore' },
   ];
   const activeProg = $derived((prog?.active as string) ?? 'classique');
+  const progSummary = $derived.by(() => {
+    const jours: any[] = progJours;
+    if (!jours.length) return null;
+    const total = jours.reduce((s: number, j: any) => s + (j.deficit ?? 0), 0);
+    return { total: Math.round(total), avg: Math.round(total / jours.length), days: jours.length };
+  });
 
   const currentAct = $derived(profile?.act ?? '1.30');
   const bmrLive = $derived(calcBMR(profile));
@@ -348,6 +354,9 @@
         <div class="proj-item"><div class="proj-val">{endProj.bf}%</div><div class="proj-lbl">Masse grasse</div></div>
       </div>
       <div class="caption proj-sub">−{endProj.lost} kg de gras · historique réel + cibles du programme</div>
+      {#if progSummary}
+        <div class="caption proj-sub proj-sum">{progSummary.total.toLocaleString('fr')} kcal brûlées au total · déficit moyen {progSummary.avg.toLocaleString('fr')} kcal/j</div>
+      {/if}
       <div class="prog-switch">
         {#each PROGRAMS as pg}
           <button class="prog-cell" class:active={activeProg === pg.id} onclick={() => selectProgram(pg.id)}>{pg.label}</button>
@@ -472,6 +481,7 @@
 .section-title-flat { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin:8px 0 8px; }
 .section-hint { font-size:13px; color:var(--c-text2); margin:0; }
 
+.proj-sum { font-weight:600; color:var(--c-text); margin-top:2px; }
 .prog-switch { display:flex; gap:6px; margin-top:12px; }
 .prog-cell { flex:1; padding:9px 4px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text2); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); transition:background .15s, color .15s; }
 .prog-cell.active { background:var(--c-accent); color:var(--c-accent-fg); border-color:var(--c-accent); }

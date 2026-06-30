@@ -172,7 +172,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V7.8</div>
+  <div class="version caption">FitProX · V7.9</div>
 </div>
 
 <style>
