@@ -57,6 +57,55 @@
     return { total: Math.round(total), avg: Math.round(total / jours.length), days: jours.length };
   });
 
+  // Preset initial d'un programme jamais ouvert, dérivé de la sélection courante :
+  // chill = dimanches en Libre (recup) ; hardcore = aucun jour Libre ; classique = copie.
+  function presetSel(id: string, baseSel: Record<string, string>): Record<string, string> {
+    const out: Record<string, string> = { ...baseSel };
+    if (id === 'chill') {
+      Object.keys(out).forEach((ds) => {
+        const p = ds.split('/').map(Number);
+        if (p.length === 3 && new Date(p[2], p[1]-1, p[0]).getDay() === 0) out[ds] = 'Libre';
+      });
+    } else if (id === 'hardcore') {
+      Object.keys(out).forEach((ds) => { if (out[ds] === 'Libre') out[ds] = ''; });
+    }
+    return out;
+  }
+
+  // Résumé (total deficit + kg) d'une selection donnée, sans toucher aux données
+  function summarizeSel(data: any, selMap: Record<string, string>) {
+    const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
+    const jours: any[] = data.programme?.jours ?? [];
+    const bmr = calcBMR(data.profile ?? {});
+    const actKey = data.profile?.act ?? '1.40';
+    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
+    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    let total = 0;
+    jours.forEach((j: any) => {
+      const ds = dsOf(j);
+      const value = selMap[ds] ?? selectionFor(data, j, ds);
+      if (value === 'Libre') return;
+      const tdee = Math.round(calcTDEE(bmr, actKey, value === '' ? 0 : (curActs[value] ?? 0)));
+      total += Math.round(Math.min(tdee * 0.25, tdee - minIntake));
+    });
+    return { total: Math.round(total), kg: +(total / 7700).toFixed(1) };
+  }
+
+  // Comparateur : total & kg de chaque programme (stocké, sinon preset dérivé du courant)
+  const progCompare = $derived.by(() => {
+    const data = $appData as any;
+    if (!data?.programme?.jours?.length) return [];
+    const jours: any[] = data.programme.jours;
+    const curSel: Record<string, string> = {};
+    jours.forEach((j: any) => { const ds = dsOf(j); if (ds) curSel[ds] = daySelections[ds] ?? selectionFor(data, j, ds); });
+    const stored = (data.programme?.progSel ?? {}) as Record<string, Record<string, string>>;
+    return PROGRAMS.map((pg) => {
+      const sel = pg.id === activeProg ? curSel : (stored[pg.id] ?? presetSel(pg.id, curSel));
+      return { ...pg, ...summarizeSel(data, sel) };
+    });
+  });
+  const progCells = $derived((progCompare.length ? progCompare : PROGRAMS) as any[]);
+
   const currentAct = $derived(profile?.act ?? '1.30');
   const bmrLive = $derived(calcBMR(profile));
   const minIntakeLive = $derived(Math.max(Math.round(bmrLive), profile.sex === 'f' ? 1200 : 1500));
@@ -265,7 +314,7 @@
     jours.forEach((j: any) => { const ds = dsOf(j); if (ds) curSel[ds] = daySelections[ds] ?? selectionFor(data, j, ds); });
     const progSel = { ...(data.programme?.progSel ?? {}), [activeProg]: curSel };
     // 2. selection cible : celle du programme demandé, sinon clone du courant
-    const targetSel: Record<string, string> = progSel[id] ?? { ...curSel };
+    const targetSel: Record<string, string> = progSel[id] ?? presetSel(id, curSel);
     // 3. recompute pour la cible
     const { newDays, newJours } = computeProgram(data, targetSel);
     const finalProgSel = { ...progSel, [id]: targetSel };
@@ -326,8 +375,11 @@
         <div class="caption proj-sub proj-sum">{progSummary.total.toLocaleString('fr')} kcal brûlées au total · déficit moyen {progSummary.avg.toLocaleString('fr')} kcal/j</div>
       {/if}
       <div class="prog-switch">
-        {#each PROGRAMS as pg}
-          <button class="prog-cell" class:active={activeProg === pg.id} onclick={() => selectProgram(pg.id)}>{pg.label}</button>
+        {#each progCells as pg}
+          <button class="prog-cell" class:active={activeProg === pg.id} onclick={() => selectProgram(pg.id)}>
+            <span class="prog-cell-name">{pg.label}</span>
+            {#if 'kg' in pg}<span class="prog-cell-kg">−{pg.kg.toLocaleString('fr')} kg</span>{/if}
+          </button>
         {/each}
       </div>
     </div>
@@ -451,8 +503,10 @@
 
 .proj-sum { font-weight:600; color:var(--c-text); margin-top:2px; }
 .prog-switch { display:flex; gap:6px; margin-top:12px; }
-.prog-cell { flex:1; padding:9px 4px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text2); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); transition:background .15s, color .15s; }
+.prog-cell { display:flex; flex-direction:column; gap:2px; align-items:center; flex:1; padding:8px 4px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text2); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); transition:background .15s, color .15s; }
 .prog-cell.active { background:var(--c-accent); color:var(--c-accent-fg); border-color:var(--c-accent); }
+.prog-cell-name { font-size:12px; font-weight:600; }
+.prog-cell-kg { font-size:10px; font-weight:500; opacity:.75; }
 .act-select { width:100%; padding:10px 12px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text); font-size:13px; font-family:var(--font); }
 .act-select:focus { outline:none; border-color:var(--c-accent); }
 
@@ -486,14 +540,11 @@
 .jour-right { text-align:right; flex-shrink:0; min-width:70px; }
 .jour-cible { font-size:12px; font-weight:500; color:var(--c-text2); }
 .jour-cible span { font-size:10px; color:var(--c-text3); }
-.jour-eaten { font-size:12px; font-weight:600; }
 .muted { color:var(--c-text3) !important; }
 .jour-def { font-size:10px; margin-top:2px; }
 .jour-tag { background:var(--c-accent); color:var(--c-accent-fg); border-radius:6px; padding:2px 7px; font-size:10px; font-weight:600; }
 
   .jours-head { display:flex; align-items:center; justify-content:space-between; }
-  .recalc-btn { border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); }
-  .recalc-btn:active { background:var(--c-accent); color:var(--c-accent-fg); }
 
   .jour-metric { font-size:14px; font-weight:700; color:var(--c-text); text-align:right; }
   .jm-lbl { font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin-right:3px; }
@@ -505,8 +556,6 @@
   .proj-val { font-size:24px; font-weight:700; color:var(--c-accent); letter-spacing:-0.5px; }
   .proj-lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--c-text3); margin-top:2px; }
   .proj-sub { text-align:center; }
-
-  .recalc-btn.dirty { background:var(--c-accent); color:var(--c-accent-fg); }
 
   .save-status { font-size:12px; font-weight:600; color:var(--c-text3); }
 

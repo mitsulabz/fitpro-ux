@@ -42,7 +42,30 @@ export async function signOut(token: string) {
   });
 }
 
-export async function loadAppState(token: string, userId: string): Promise<Record<string, unknown> | null> {
+// ---- Fiabilité multi-appareils & hors-ligne ----
+// lastSyncTs : timestamp (_ts) du dernier état cloud connu par CET appareil.
+// Si au moment de sauver le cloud est plus récent (modifié par un autre appareil),
+// on fusionne au lieu d'écraser.
+let lastSyncTs = 0;
+const PENDING_KEY = 'fitpro_pending_save';
+
+function favMergeKey(f: any) { return ((f?.name ?? '') + '').trim().toLowerCase() + '|' + (f?.per ?? '100'); }
+
+// Fusionne l'état cloud (autre appareil) et l'état local (édition en cours).
+// Le local gagne sur profile/programme et sur les jours qu'il connaît ;
+// les jours et favoris ajoutés ailleurs sont conservés.
+export function mergeStates(cloud: any, local: any): any {
+  if (!cloud) return local;
+  const days = { ...(cloud.days ?? {}), ...(local.days ?? {}) };
+  const favs: any[] = Array.isArray(local.favorites) ? [...local.favorites] : [];
+  const seen = new Set(favs.map(favMergeKey));
+  (Array.isArray(cloud.favorites) ? cloud.favorites : []).forEach((f: any) => {
+    if (!seen.has(favMergeKey(f))) favs.push(f);
+  });
+  return { ...cloud, ...local, days, favorites: favs };
+}
+
+async function loadRaw(token: string, userId: string): Promise<any | null> {
   const r = await fetch(
     `${SUPABASE_URL}/rest/v1/app_state?select=data&user_id=eq.${userId}&limit=1`,
     { headers: headers(token) }
@@ -52,12 +75,54 @@ export async function loadAppState(token: string, userId: string): Promise<Recor
   return rows?.[0]?.data ?? null;
 }
 
+export async function loadAppState(token: string, userId: string): Promise<Record<string, unknown> | null> {
+  let data = await loadRaw(token, userId);
+  // sauvegarde en attente (échec réseau précédent) : on la ré-applique par-dessus le cloud
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (raw) {
+      const pending = JSON.parse(raw);
+      if (pending?.userId === userId && pending?.data) {
+        data = mergeStates(data, pending.data);
+      }
+    }
+  } catch {}
+  lastSyncTs = (data as any)?._ts ?? 0;
+  return data;
+}
+
 export async function saveAppState(token: string, userId: string, data: unknown) {
-  await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
-    method: 'POST',
-    headers: { ...headers(token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ user_id: userId, data, updated_at: new Date().toISOString() }),
-  });
+  let toSave: any = { ...(data as any) };
+  // 1. anti-écrasement : le cloud a-t-il été modifié par un autre appareil depuis notre dernier sync ?
+  try {
+    const cloud = await loadRaw(token, userId);
+    if (cloud?._ts && lastSyncTs && cloud._ts > lastSyncTs) {
+      toSave = mergeStates(cloud, toSave);
+    }
+  } catch {} // hors-ligne : on tente quand même, l'échec ira dans la file
+  toSave._ts = Date.now();
+  // 2. écriture ; en cas d'échec (hors-ligne), mise en file locale pour retry
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+      method: 'POST',
+      headers: { ...headers(token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, data: toSave, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error('save failed ' + r.status);
+    lastSyncTs = toSave._ts;
+    try { localStorage.removeItem(PENDING_KEY); } catch {}
+  } catch {
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ userId, data: toSave })); } catch {}
+  }
+  return toSave;
+}
+
+// Retente la sauvegarde en attente (appelé au retour du réseau / au démarrage)
+export async function retryPendingSave(token: string, userId: string) {
+  let pending: any = null;
+  try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null'); } catch {}
+  if (!pending || pending.userId !== userId) return;
+  await saveAppState(token, userId, pending.data);
 }
 
 export async function upsertProfile(token: string, userId: string, email: string) {

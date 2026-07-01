@@ -294,7 +294,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.0";
+  const BUILD = "V8.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -312,6 +312,50 @@
     appData.set(newData);
     saveAppState(s.access_token, s.user.id, newData);
   }
+
+  async function saveWeight(val: string, dayKey: string = todayKey) {
+    const s = get(session);
+    const data = get(appData) as any;
+    if (!s || !data) return;
+    const w = parseFloat(String(val).replace(',', '.')) || 0;
+    const dayData = data.days?.[dayKey] ?? {};
+    const newData = { ...data, days: { ...data.days, [dayKey]: { ...dayData, weight: w || undefined } } };
+    appData.set(newData);
+    saveAppState(s.access_token, s.user.id, newData);
+  }
+
+  // ---- Graphe de poids : points saisis + moyenne glissante 7 jours ----
+  const weightSeries = $derived.by(() => {
+    const entries: { t: number; w: number }[] = [];
+    Object.entries((days as any) ?? {}).forEach(([k, d]: [string, any]) => {
+      const w = nf(d?.weight);
+      if (!w) return;
+      const parts = k.split('/').map(Number);
+      if (parts.length !== 3) return;
+      entries.push({ t: new Date(parts[2], parts[1]-1, parts[0]).getTime(), w });
+    });
+    entries.sort((a, b) => a.t - b.t);
+    if (entries.length < 2) return null;
+    // moyenne glissante 7 jours (fenêtre calendaire)
+    const avg = entries.map((e) => {
+      const win = entries.filter((x) => e.t - x.t >= 0 && e.t - x.t < 7 * 86400000);
+      return { t: e.t, w: win.reduce((s, x) => s + x.w, 0) / win.length };
+    });
+    const all = entries.map(e => e.w).concat(avg.map(a => a.w));
+    const min = Math.min(...all), max = Math.max(...all);
+    const pad = Math.max(0.4, (max - min) * 0.15);
+    const lo = min - pad, hi = max + pad;
+    const t0 = entries[0].t, t1 = entries[entries.length - 1].t || t0 + 1;
+    const X = (t: number) => t1 === t0 ? 0 : ((t - t0) / (t1 - t0)) * 300;
+    const Y = (w: number) => 80 - ((w - lo) / (hi - lo)) * 80;
+    const pts = entries.map(e => `${X(e.t).toFixed(1)},${Y(e.w).toFixed(1)}`).join(' ');
+    const avgPts = avg.map(a => `${X(a.t).toFixed(1)},${Y(a.w).toFixed(1)}`).join(' ');
+    const last = entries[entries.length - 1];
+    const lastAvg = avg[avg.length - 1];
+    const delta = +(last.w - entries[0].w).toFixed(1);
+    return { pts, avgPts, last: last.w, lastAvg: +lastAvg.w.toFixed(1), delta, n: entries.length,
+             lastX: X(last.t).toFixed(1), lastY: Y(last.w).toFixed(1) };
+  });
 
   const SUPPS = [
     { key: 'folic', label: 'Folic Expert' },
@@ -621,7 +665,32 @@
         <button class="supp-chip" class:on={today?.supps?.[sp.key]} onclick={() => toggleSupp(sp.key)}><span class="supp-box">{today?.supps?.[sp.key] ? '✓' : ''}</span> {sp.label}</button>
       {/each}
     </div>
+    <div class="sport-extra-row" style="border-top:0.5px solid var(--c-border);margin-top:8px;padding-top:10px">
+      <span class="sport-extra-label">⚖️ Poids du jour</span>
+      <input class="sport-extra-inp" type="number" inputmode="decimal" min="0" step="0.1"
+        placeholder="—"
+        value={today?.weight ?? ''}
+        onblur={(e) => saveWeight((e.target as HTMLInputElement).value)}
+      />
+      <span class="sport-extra-unit">kg</span>
+    </div>
   </div>
+
+  <!-- Courbe de poids -->
+  {#if weightSeries}
+  <div class="card foods-card">
+    <div class="foods-header">
+      <span class="label">Poids</span>
+      <span class="weight-badge">{weightSeries.last.toLocaleString('fr')} kg · moy. 7j {weightSeries.lastAvg.toLocaleString('fr')} kg</span>
+    </div>
+    <svg viewBox="-4 -6 312 92" class="weight-chart" preserveAspectRatio="none">
+      <polyline points={weightSeries.pts} fill="none" stroke="var(--c-border2)" stroke-width="1.5" />
+      <polyline points={weightSeries.avgPts} fill="none" stroke="var(--c-accent)" stroke-width="2.5" stroke-linecap="round" />
+      <circle cx={weightSeries.lastX} cy={weightSeries.lastY} r="3" fill="var(--c-accent)" />
+    </svg>
+    <div class="caption" style="margin-top:6px">{weightSeries.n} pesées · {weightSeries.delta <= 0 ? '' : '+'}{weightSeries.delta.toLocaleString('fr')} kg depuis le début · la ligne épaisse = moyenne 7 j (fiable), la fine = pesées brutes</div>
+  </div>
+  {/if}
 
 
   <!-- Historique des jours passés -->
@@ -713,6 +782,8 @@
 
 /* Foods */
 .foods-card { padding:16px; margin-bottom:10px; }
+.weight-badge { font-size:12px; font-weight:600; color:var(--c-text2); }
+.weight-chart { width:100%; height:88px; display:block; }
 .foods-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .add-food-btn { display:flex; align-items:center; gap:5px; padding:6px 12px; border:none; border-radius:20px; background:var(--c-accent); color:var(--c-accent-fg); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--font); }
 .foods-empty { font-size:13px; color:var(--c-text3); text-align:center; padding:12px 0; }

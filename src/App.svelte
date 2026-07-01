@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme, activeTab, session, authLoading, appData, persistSession, restoreSession, t } from "./lib/store";
-  import { loadAppState, refreshToken, upsertProfile } from "./lib/supabase";
+  import { loadAppState, refreshToken, upsertProfile, retryPendingSave } from "./lib/supabase";
   import AuthGate from "./lib/AuthGate.svelte";
   import BottomNav from "./lib/BottomNav.svelte";
   import Dashboard from "./lib/Dashboard.svelte";
@@ -32,6 +32,11 @@
   }
 
   onMount(async () => {
+    // retour du réseau : rejoue la sauvegarde en attente s'il y en a une
+    window.addEventListener('online', () => {
+      const s = get(session);
+      if (s) retryPendingSave(s.access_token, s.user.id);
+    });
     const saved = restoreSession();
     if (saved) {
       session.set(saved);
@@ -66,5 +71,4 @@
 
 <style>
 .loading { flex:1; display:flex; align-items:center; justify-content:center; color:var(--c-text3); font-size:14px; }
-.placeholder { padding:60px 0; text-align:center; color:var(--c-text3); font-size:14px; }
 </style>
