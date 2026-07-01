@@ -294,7 +294,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.1";
+  const BUILD = "V8.2";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -320,6 +320,17 @@
     const w = parseFloat(String(val).replace(',', '.')) || 0;
     const dayData = data.days?.[dayKey] ?? {};
     const newData = { ...data, days: { ...data.days, [dayKey]: { ...dayData, weight: w || undefined } } };
+    appData.set(newData);
+    saveAppState(s.access_token, s.user.id, newData);
+  }
+
+  async function saveBf(val: string, dayKey: string = todayKey) {
+    const s = get(session);
+    const data = get(appData) as any;
+    if (!s || !data) return;
+    const bf = parseFloat(String(val).replace(',', '.')) || 0;
+    const dayData = data.days?.[dayKey] ?? {};
+    const newData = { ...data, days: { ...data.days, [dayKey]: { ...dayData, bf: bf || undefined } } };
     appData.set(newData);
     saveAppState(s.access_token, s.user.id, newData);
   }
@@ -353,8 +364,29 @@
     const last = entries[entries.length - 1];
     const lastAvg = avg[avg.length - 1];
     const delta = +(last.w - entries[0].w).toFixed(1);
+    // serie masse grasse (echelle propre, superposee)
+    const bfE: { t: number; v: number }[] = [];
+    Object.entries((days as any) ?? {}).forEach(([k, d]: [string, any]) => {
+      const v = nf(d?.bf);
+      if (!v) return;
+      const parts = k.split('/').map(Number);
+      if (parts.length !== 3) return;
+      bfE.push({ t: new Date(parts[2], parts[1]-1, parts[0]).getTime(), v });
+    });
+    bfE.sort((a, b) => a.t - b.t);
+    let bfPts = '', lastBf = 0;
+    if (bfE.length >= 2) {
+      const bmin = Math.min(...bfE.map(e => e.v)), bmax = Math.max(...bfE.map(e => e.v));
+      const bpad = Math.max(0.3, (bmax - bmin) * 0.15);
+      const blo = bmin - bpad, bhi = bmax + bpad;
+      const YB = (v: number) => 80 - ((v - blo) / (bhi - blo)) * 80;
+      bfPts = bfE.map(e => `${X(e.t).toFixed(1)},${YB(e.v).toFixed(1)}`).join(' ');
+      lastBf = bfE[bfE.length - 1].v;
+    } else if (bfE.length === 1) {
+      lastBf = bfE[0].v;
+    }
     return { pts, avgPts, last: last.w, lastAvg: +lastAvg.w.toFixed(1), delta, n: entries.length,
-             lastX: X(last.t).toFixed(1), lastY: Y(last.w).toFixed(1) };
+             lastX: X(last.t).toFixed(1), lastY: Y(last.w).toFixed(1), bfPts, lastBf };
   });
 
   const SUPPS = [
@@ -674,6 +706,15 @@
       />
       <span class="sport-extra-unit">kg</span>
     </div>
+    <div class="sport-extra-row">
+      <span class="sport-extra-label">📊 Masse grasse</span>
+      <input class="sport-extra-inp" type="number" inputmode="decimal" min="0" max="60" step="0.1"
+        placeholder="—"
+        value={today?.bf ?? ''}
+        onblur={(e) => saveBf((e.target as HTMLInputElement).value)}
+      />
+      <span class="sport-extra-unit">%</span>
+    </div>
   </div>
 
   <!-- Courbe de poids -->
@@ -681,14 +722,15 @@
   <div class="card foods-card">
     <div class="foods-header">
       <span class="label">Poids</span>
-      <span class="weight-badge">{weightSeries.last.toLocaleString('fr')} kg · moy. 7j {weightSeries.lastAvg.toLocaleString('fr')} kg</span>
+      <span class="weight-badge">{weightSeries.last.toLocaleString('fr')} kg · moy. 7j {weightSeries.lastAvg.toLocaleString('fr')} kg{#if weightSeries.lastBf} · <span style="color:var(--c-blue)">{weightSeries.lastBf.toLocaleString('fr')}% MG</span>{/if}</span>
     </div>
     <svg viewBox="-4 -6 312 92" class="weight-chart" preserveAspectRatio="none">
       <polyline points={weightSeries.pts} fill="none" stroke="var(--c-border2)" stroke-width="1.5" />
       <polyline points={weightSeries.avgPts} fill="none" stroke="var(--c-accent)" stroke-width="2.5" stroke-linecap="round" />
+      {#if weightSeries.bfPts}<polyline points={weightSeries.bfPts} fill="none" stroke="var(--c-blue)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" />{/if}
       <circle cx={weightSeries.lastX} cy={weightSeries.lastY} r="3" fill="var(--c-accent)" />
     </svg>
-    <div class="caption" style="margin-top:6px">{weightSeries.n} pesées · {weightSeries.delta <= 0 ? '' : '+'}{weightSeries.delta.toLocaleString('fr')} kg depuis le début · la ligne épaisse = moyenne 7 j (fiable), la fine = pesées brutes</div>
+    <div class="caption" style="margin-top:6px">{weightSeries.n} pesées · {weightSeries.delta <= 0 ? '' : '+'}{weightSeries.delta.toLocaleString('fr')} kg depuis le début · ligne épaisse = poids moy. 7 j · fine = pesées brutes · pointillés bleus = % MG</div>
   </div>
   {/if}
 
@@ -734,6 +776,24 @@
           onblur={(e) => saveExtraKcal((e.target as HTMLInputElement).value, day.key)}
         />
         <span class="sport-extra-unit">kcal</span>
+      </div>
+      <div class="sport-extra-row">
+        <span class="sport-extra-label">⚖️ Poids</span>
+        <input class="sport-extra-inp" type="number" inputmode="decimal" min="0" step="0.1"
+          placeholder="—"
+          value={(days as any)[day.key]?.weight ?? ''}
+          onblur={(e) => saveWeight((e.target as HTMLInputElement).value, day.key)}
+        />
+        <span class="sport-extra-unit">kg</span>
+      </div>
+      <div class="sport-extra-row">
+        <span class="sport-extra-label">📊 Masse grasse</span>
+        <input class="sport-extra-inp" type="number" inputmode="decimal" min="0" max="60" step="0.1"
+          placeholder="—"
+          value={(days as any)[day.key]?.bf ?? ''}
+          onblur={(e) => saveBf((e.target as HTMLInputElement).value, day.key)}
+        />
+        <span class="sport-extra-unit">%</span>
       </div>
     </div>
   </details>
