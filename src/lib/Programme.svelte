@@ -1,5 +1,6 @@
 <script lang="ts">
   import { appData, session, persistSession } from './store';
+  import { nf, calcBMR, calcTDEE } from './calc';
   import { saveAppState, refreshToken } from './supabase';
   import { get } from 'svelte/store';
   import { onMount, onDestroy } from 'svelte';
@@ -197,19 +198,7 @@
 
   // BMR + TDEE helpers (mirror FitPro logic)
   // Parse tolerant a la virgule francaise (32,9 -> 32.9)
-  function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
 
-  function calcBMR(p: any): number {
-    const w = nf(p.weight) || 100, h = nf(p.height) || 180, age = nf(p.age) || 40;
-    const bf = nf(p.bf);
-    if (bf > 0) return 370 + 21.6 * w * (1 - bf / 100);
-    const sex = p.sex === 'f' ? -161 : 5;
-    return 10 * w + 6.25 * h - 5 * age + sex;
-  }
-
-  function calcTDEE(bmr: number, actKey: string, sportKcal: number): number {
-    return bmr * (nf(actKey) || 1.4) + sportKcal;
-  }
 
   // Edition LOCALE uniquement : on memorise le choix. Le calcul + la sauvegarde se font au clic "Recalculer".
   function setDaySelection(ds: string, value: string) {
@@ -219,32 +208,11 @@
   // Applique les choix (daySelections) + recalcule tous les jours + sauvegarde, EN UNE FOIS
   async function recalcAll() {
     const data = get(appData) as any;
-    const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
     const jours: any[] = data.programme?.jours ?? [];
-    const bmr = calcBMR(data.profile ?? {});
-    const actKey = data.profile?.act ?? '1.40';
-    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor);
-    const newDays = { ...(data.days ?? {}) };
-    const newJours = jours.map((j: any) => {
-      const ds = dsOf(j);
-      const value = daySelections[ds] ?? selectionFor(data, j, ds); // choix en attente, sinon etat courant
-      // applique le choix sur le jour (progActivity = source de verite)
-      const progAct = value === '' ? false : { name: value, kcal: value === 'Libre' ? 0 : (curActs[value] ?? 0) };
-      newDays[ds] = { ...(newDays[ds] ?? {}), progActivity: progAct };
-      if (value === 'Libre') {
-        const brulees = Math.round(calcTDEE(bmr, actKey, 0));
-        return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
-      }
-      const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
-      const tdee = Math.round(calcTDEE(bmr, actKey, sportKcal));
-      const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
-      const calories = tdee - deficit;
-      return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
-    });
-    // sauvegarde la selection d'activite par jour pour le programme actif
+    // selection effective : choix en attente, sinon etat courant
     const selMap: Record<string, string> = {};
     jours.forEach((j: any) => { const ds = dsOf(j); if (ds) selMap[ds] = daySelections[ds] ?? selectionFor(data, j, ds); });
+    const { newDays, newJours } = computeProgram(data, selMap);
     const active = (data.programme?.active as string) ?? 'classique';
     const progSel = { ...(data.programme?.progSel ?? {}), [active]: selMap };
     const newData = { ...data, days: newDays, programme: { ...data.programme, jours: newJours, progSel } };

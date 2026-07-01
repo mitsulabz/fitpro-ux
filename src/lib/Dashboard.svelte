@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, appData, session, persistSession } from "./store";
+  import { nf, calcBMR } from './calc';
   import { saveAppState, refreshToken } from "./supabase";
   import { get } from "svelte/store";
   import FoodModal from "./FoodModal.svelte";
@@ -73,13 +74,8 @@
   // ── Progression reelle : kcal reellement brulees / total a bruler jusqu'a la fin ──
   const profile = $derived(($appData as any)?.profile ?? {});
   const activites = $derived((prog?.activites ?? {}) as Record<string, number>);
-  function nfp(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
-  function bmrOf(pr: any): number {
-    const w = nfp(pr.weight) || 100, h = nfp(pr.height) || 180, age = nfp(pr.age) || 40, bf = nfp(pr.bf);
-    if (bf > 0) return 370 + 21.6 * w * (1 - bf / 100);
-    const sex = pr.sex === 'f' ? -161 : 5;
-    return 10 * w + 6.25 * h - 5 * age + sex;
-  }
+  const nfp = nf;
+  const bmrOf = calcBMR;
   function actOf(j: any, ds: string): string {
     if (typeof j?.activity === 'string') return j.activity;
     const d = (days as any)[ds];
@@ -184,7 +180,6 @@
     return { endStr, wR: wR.toFixed(1), bfR: bfR.toFixed(1), wO: wO.toFixed(1), bfO: bfO.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
-  function nf(v: any): number { return parseFloat(String(v ?? '').replace(',', '.')) || 0; }
   function effDeficit(j: any): number {
     const jd = parseJour(j.jour); if (!jd) return j.deficit || 0;
     const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -299,7 +294,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V7.9";
+  const BUILD = "V8.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);

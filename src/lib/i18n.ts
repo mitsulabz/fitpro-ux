@@ -22,13 +22,6 @@ const fr = {
     body_fat_projected: 'masse grasse projetée',
     progress: 'Progression programme',
   },
-  journal: {
-    title: 'Journal',
-    day: 'J',
-    add_meal: 'Ajouter un repas',
-    in_progress: 'en cours',
-    eaten: 'kcal mangé',
-  },
   auth: {
     title: 'FitProX',
     subtitle: 'Suivi nutrition & performance',
@@ -68,13 +61,6 @@ const en: typeof fr = {
     goal_nov: 'Goal Nov.',
     body_fat_projected: 'projected body fat',
     progress: 'Programme progress',
-  },
-  journal: {
-    title: 'Journal',
-    day: 'D',
-    add_meal: 'Add a meal',
-    in_progress: 'in progress',
-    eaten: 'kcal eaten',
   },
   auth: {
     title: 'FitProX',
