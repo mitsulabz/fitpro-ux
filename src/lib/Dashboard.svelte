@@ -315,7 +315,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.7";
+  const BUILD = "V8.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -655,6 +655,32 @@
   </div>
   {/if}
 
+  {#if fatLost && progStats.defKcalPos > 0 && progStats.totalCible > 0}
+  {@const pScale = progStats.totalCible / progStats.defKcalPos}
+  {@const pFat = fatLost.g * pScale}
+  {@const pMusc = fatLost.realMuscleG * pScale}
+  {@const pLean = fatLost.leanG * pScale}
+  {@const pWater = fatLost.waterG * pScale}
+  <div class="card lost-card">
+    <div class="section-title-inline">Projection fin de programme (J{totalDays})</div>
+    <div class="lost-grid">
+      <div class="lost-item">
+        <div class="lost-val">−{((pFat + pLean) / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(pFat / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Gras perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-red)">−{(pMusc / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Muscle perdu</div>
+      </div>
+    </div>
+    <div class="caption" style="margin-top:8px">Extrapolation au déficit total programmé, au même ratio de macros qu'aujourd'hui · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
+  </div>
+  {/if}
+
   <div class="section-label" style="margin-top:0">Aujourd'hui</div>
   <div class="macro-row">
     {#each [
@@ -863,6 +889,7 @@
 .hero-unit { font-size:13px; font-weight:400; letter-spacing:0; margin-left:3px; color:var(--c-text2); }
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
 .lost-card { padding:14px; margin-bottom:10px; }
+.section-title-inline { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.06em; color:var(--c-text3); margin-bottom:10px; }
 .lost-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 .lost-item { text-align:center; }
 .lost-val { font-size:17px; font-weight:700; color:var(--c-text); }
