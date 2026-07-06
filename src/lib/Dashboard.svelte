@@ -32,6 +32,27 @@
 
   const prog = $derived(($appData as any)?.programme ?? {});
   const progJours = $derived(prog?.jours ?? []);
+  const avgMacros = $derived.by(() => {
+    const jours: any[] = progJours;
+    const j1 = jours.length ? parseJour(jours[0].jour) : null;
+    if (j1) j1.setHours(0, 0, 0, 0);
+    let sp = 0, sg = 0, sl = 0, n = 0;
+    Object.entries((days as any) ?? {}).forEach(([k, d]: [string, any]) => {
+      const fds = d?.foods ?? [];
+      if (!fds.length) return;
+      const parts = k.split('/').map(Number);
+      if (parts.length !== 3) return;
+      const t = new Date(parts[2], parts[1]-1, parts[0]);
+      if (j1 && t < j1) return; // avant le 1er jour de regime
+      if (t > todayDate) return;
+      sp += fds.reduce((s: number, f: any) => s + (f.p||0), 0);
+      sg += fds.reduce((s: number, f: any) => s + (f.g||0), 0);
+      sl += fds.reduce((s: number, f: any) => s + (f.l||0), 0);
+      n++;
+    });
+    if (!n) return null;
+    return { p: Math.round(sp / n), g: Math.round(sg / n), l: Math.round(sl / n), n };
+  });
   const days = $derived(($appData as any)?.days ?? {});
   const today = $derived(days[todayKey] ?? {});
   const foods = $derived(today?.foods ?? []);
@@ -294,7 +315,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.4";
+  const BUILD = "V8.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -609,6 +630,26 @@
     </div>
     {/each}
   </div>
+
+  {#if avgMacros}
+  <div class="section-label" style="margin-top:0">Moyenne / jour depuis le début ({avgMacros.n} j)</div>
+  <div class="macro-row">
+    {#each [
+      { key: 'p', label: $t.dashboard.proteins, color: 'var(--c-accent)', cible: mCible.p },
+      { key: 'g', label: $t.dashboard.carbs,    color: 'var(--c-blue)',   cible: mCible.g },
+      { key: 'l', label: $t.dashboard.fats,     color: 'var(--c-red)',    cible: mCible.l },
+    ] as m}
+    {@const avg = (avgMacros as any)[m.key]}
+    <div class="card macro-card">
+      <div class="label">{m.label}</div>
+      <div class="progress-bar" style="margin:10px 0 8px">
+        <div class="progress-fill" style="width:{pct(avg, m.cible)}%;background:{m.color};opacity:.65"></div>
+      </div>
+      <div class="macro-val">{avg}<span class="macro-target">/{m.cible}g</span></div>
+    </div>
+    {/each}
+  </div>
+  {/if}
 
 
   <!-- Repas du jour -->
