@@ -315,7 +315,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.5";
+  const BUILD = "V8.6";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -614,23 +614,6 @@
     {/if}
   </div>
 
-  <div class="macro-row">
-    {#each [
-      { key: 'p', label: $t.dashboard.proteins, color: 'var(--c-accent)', cible: mCible.p },
-      { key: 'g', label: $t.dashboard.carbs,    color: 'var(--c-blue)',   cible: mCible.g },
-      { key: 'l', label: $t.dashboard.fats,     color: 'var(--c-red)',    cible: mCible.l },
-    ] as m}
-    {@const actual = Math.round(macros[m.key as keyof typeof macros])}
-    <div class="card macro-card">
-      <div class="label">{m.label}</div>
-      <div class="progress-bar" style="margin:10px 0 8px">
-        <div class="progress-fill" style="width:{pct(actual, m.cible)}%;background:{m.color}"></div>
-      </div>
-      <div class="macro-val">{actual}<span class="macro-target">/{m.cible}g</span></div>
-    </div>
-    {/each}
-  </div>
-
   {#if avgMacros}
   <div class="section-label" style="margin-top:0">Moyenne / jour depuis le début ({avgMacros.n} j)</div>
   <div class="macro-row">
@@ -650,6 +633,24 @@
     {/each}
   </div>
   {/if}
+
+  <div class="section-label" style="margin-top:0">Aujourd'hui</div>
+  <div class="macro-row">
+    {#each [
+      { key: 'p', label: $t.dashboard.proteins, color: 'var(--c-accent)', cible: mCible.p },
+      { key: 'g', label: $t.dashboard.carbs,    color: 'var(--c-blue)',   cible: mCible.g },
+      { key: 'l', label: $t.dashboard.fats,     color: 'var(--c-red)',    cible: mCible.l },
+    ] as m}
+    {@const actual = Math.round(macros[m.key as keyof typeof macros])}
+    <div class="card macro-card">
+      <div class="label">{m.label}</div>
+      <div class="progress-bar" style="margin:10px 0 8px">
+        <div class="progress-fill" style="width:{pct(actual, m.cible)}%;background:{m.color}"></div>
+      </div>
+      <div class="macro-val">{actual}<span class="macro-target">/{m.cible}g</span></div>
+    </div>
+    {/each}
+  </div>
 
 
   <!-- Repas du jour -->
