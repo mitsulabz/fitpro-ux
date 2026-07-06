@@ -315,7 +315,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.6";
+  const BUILD = "V8.7";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -634,6 +634,27 @@
   </div>
   {/if}
 
+  {#if fatLost}
+  {@const totalLostG = fatLost.g + fatLost.leanG}
+  <div class="card lost-card">
+    <div class="lost-grid">
+      <div class="lost-item">
+        <div class="lost-val">−{(totalLostG / 1000).toFixed(2).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.g / 1000).toFixed(2).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Gras perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-red)">−{(fatLost.realMuscleG / 1000).toFixed(2).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Muscle perdu</div>
+      </div>
+    </div>
+    <div class="caption" style="margin-top:8px">Déduit du déficit cumulé et de ta moyenne de protéines · dont eau/glycogène −{(fatLost.waterG / 1000).toFixed(2).replace('.', ',')} kg · % MG estimé : {fatLost.bfNow.toLocaleString('fr')}%</div>
+  </div>
+  {/if}
+
   <div class="section-label" style="margin-top:0">Aujourd'hui</div>
   <div class="macro-row">
     {#each [
@@ -841,6 +862,11 @@
 .hero-num.no-data { color:var(--c-text3); }
 .hero-unit { font-size:13px; font-weight:400; letter-spacing:0; margin-left:3px; color:var(--c-text2); }
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+.lost-card { padding:14px; margin-bottom:10px; }
+.lost-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.lost-item { text-align:center; }
+.lost-val { font-size:17px; font-weight:700; color:var(--c-text); }
+.lost-lbl { font-size:11px; color:var(--c-text3); margin-top:2px; }
 .macro-card { padding:14px; }
 .macro-val { font-size:18px; font-weight:600; color:var(--c-text); }
 .macro-target { font-size:11px; font-weight:400; color:var(--c-text3); }
