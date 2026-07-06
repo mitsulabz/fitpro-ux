@@ -29,7 +29,9 @@
   let searching = $state(false);
   let offResults = $state<OFFProd[]>([]);
   let quantities = $state<Record<number, number>>({});
-  let favQty = $state<Record<number, number>>({});
+  let favQty = $state<Record<string, number>>({});
+  let favFilter = $state('');
+  const favNorm = (s: string) => (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   // Manuel
   let manName = $state('');
@@ -255,7 +257,13 @@
         {#if favorites.length === 0}
           <div class="empty">Aucun favori. Ajoute des aliments via Recherche, Scan ou IA.</div>
         {:else}
-          {#each favorites as fav, i}
+          {@const filtered = favorites.filter((f: any) => favNorm(f.name).includes(favNorm(favFilter)))}
+          <input class="fav-filter" type="text" placeholder="Filtrer les favoris…"
+            bind:value={favFilter} autocomplete="off" autocorrect="off" spellcheck="false" />
+          {#if filtered.length === 0}
+            <div class="empty">Aucun favori ne correspond à « {favFilter} ».</div>
+          {/if}
+          {#each filtered as fav (fav.name + '|' + (fav.per ?? '100'))}
             <div class="food-row">
               <div class="food-info">
                 <span class="food-name">{fav.name}</span>
@@ -263,11 +271,11 @@
               </div>
               <div class="qty-row">
                 <input type="number" min="1" max="50" step="1"
-                  value={favQty[i] ?? 1}
-                  oninput={(e) => { favQty = { ...favQty, [i]: +(e.target as HTMLInputElement).value }; }}
+                  value={favQty[fav.name] ?? 1}
+                  oninput={(e) => { favQty = { ...favQty, [fav.name]: +(e.target as HTMLInputElement).value }; }}
                 />
                 <span class="muted">×</span>
-                <button class="btn-add" onclick={() => addFromFav(fav, favQty[i] ?? 1)}>+</button>
+                <button class="btn-add" onclick={() => addFromFav(fav, favQty[fav.name] ?? 1)}>+</button>
               </div>
             </div>
           {/each}
@@ -345,6 +353,8 @@
 .food-macros { font-size:11px; color:var(--c-text2); }
 .muted { color:var(--c-text3); }
 .add-icon { font-size:22px; font-weight:300; color:var(--c-accent); flex-shrink:0; line-height:1; }
+.fav-filter { width:100%; padding:10px 12px; border:1px solid var(--c-border); border-radius:var(--r-md); background:var(--c-bg); color:var(--c-text); font-size:14px; font-family:var(--font); margin-bottom:8px; }
+.fav-filter:focus { outline:none; border-color:var(--c-accent); }
 .qty-row { display:flex; align-items:center; gap:4px; flex-shrink:0; }
 .qty-row input { width:52px; padding:5px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-bg); color:var(--c-text); font-size:13px; text-align:center; font-family:var(--font); }
 .btn-add { width:30px; height:30px; border:none; border-radius:50%; background:var(--c-accent); color:var(--c-accent-fg); font-size:20px; font-weight:300; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
