@@ -175,10 +175,13 @@
     // Couple directement a l'ecart de gras -> toujours coherent energetiquement.
     const muscleKcal = Math.max(0, defPos * 0.90 - fatKcal); // kcal venus de la masse maigre au lieu du gras
     const leanG = Math.round(muscleKcal / 1850 * 1000); // masse maigre humide (muscle + eau/glycogene)
-    // Part de VRAI muscle : depend de l'apport proteique (bas -> plus de muscle, haut -> surtout eau)
+    // Part de VRAI muscle : 20 % (proteines a la cible) -> 60 % (loin de la cible)
     const ratio = Math.max(0, Math.min(1, progStats.protPct));
-    const realMuscleG = Math.round(leanG * (0.10 + 0.25 * (1 - ratio)));
-    const waterG = leanG - realMuscleG;
+    let realMuscleG = Math.round(leanG * (0.20 + 0.40 * (1 - ratio)));
+    let waterG = leanG - realMuscleG;
+    // L'eau/glycogene est un STOCK (~1,75 kg max), pas un flux : l'excedent est du muscle
+    const WATER_CAP = 1750;
+    if (waterG > WATER_CAP) { realMuscleG += waterG - WATER_CAP; waterG = WATER_CAP; }
     return { g: Math.round(kg * 1000), idealG, leanG, realMuscleG, waterG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Projection a la fin du programme (extrapolation du rythme actuel)
@@ -315,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.8";
+  const BUILD = "V8.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -658,9 +661,10 @@
   {#if fatLost && progStats.defKcalPos > 0 && progStats.totalCible > 0}
   {@const pScale = progStats.totalCible / progStats.defKcalPos}
   {@const pFat = fatLost.g * pScale}
-  {@const pMusc = fatLost.realMuscleG * pScale}
   {@const pLean = fatLost.leanG * pScale}
-  {@const pWater = fatLost.waterG * pScale}
+  {@const pWaterRaw = fatLost.waterG * pScale}
+  {@const pWater = Math.min(pWaterRaw, 1750)}
+  {@const pMusc = fatLost.realMuscleG * pScale + (pWaterRaw - pWater)}
   <div class="card lost-card">
     <div class="section-title-inline">Projection fin de programme (J{totalDays})</div>
     <div class="lost-grid">
