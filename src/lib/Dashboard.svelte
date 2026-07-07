@@ -318,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V8.9";
+  const BUILD = "V9.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -653,6 +653,10 @@
         <div class="lost-val" style="color:var(--c-red)">−{(fatLost.realMuscleG / 1000).toFixed(2).replace('.', ',')} kg</div>
         <div class="lost-lbl">Muscle perdu</div>
       </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - fatLost.bfNow).toFixed(1).replace('.', ',')} pt</div>
+        <div class="lost-lbl">% MG perdu</div>
+      </div>
     </div>
     <div class="caption" style="margin-top:8px">Déduit du déficit cumulé et de ta moyenne de protéines · dont eau/glycogène −{(fatLost.waterG / 1000).toFixed(2).replace('.', ',')} kg · % MG estimé : {fatLost.bfNow.toLocaleString('fr')}%</div>
   </div>
@@ -665,6 +669,10 @@
   {@const pWaterRaw = fatLost.waterG * pScale}
   {@const pWater = Math.min(pWaterRaw, 1750)}
   {@const pMusc = fatLost.realMuscleG * pScale + (pWaterRaw - pWater)}
+  {@const pW0 = nfp(profile.weight) || 100}
+  {@const pFatInit = pW0 * fatLost.bf / 100}
+  {@const pWEnd = pW0 - (pFat + pLean) / 1000}
+  {@const pBfEnd = pWEnd > 0 ? Math.max(0, (pFatInit - pFat / 1000) / pWEnd * 100) : fatLost.bf}
   <div class="card lost-card">
     <div class="section-title-inline">Projection fin de programme (J{totalDays})</div>
     <div class="lost-grid">
@@ -680,8 +688,12 @@
         <div class="lost-val" style="color:var(--c-red)">−{(pMusc / 1000).toFixed(1).replace('.', ',')} kg</div>
         <div class="lost-lbl">Muscle perdu</div>
       </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - pBfEnd).toFixed(1).replace('.', ',')} pt</div>
+        <div class="lost-lbl">% MG perdu</div>
+      </div>
     </div>
-    <div class="caption" style="margin-top:8px">Extrapolation au déficit total programmé, au même ratio de macros qu'aujourd'hui · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
+    <div class="caption" style="margin-top:8px">Extrapolation au déficit total programmé, au même ratio de macros qu'aujourd'hui · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg · % MG final estimé : {pBfEnd.toFixed(1).replace('.', ',')}%</div>
   </div>
   {/if}
 
@@ -894,9 +906,9 @@
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
 .lost-card { padding:14px; margin-bottom:10px; }
 .section-title-inline { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.06em; color:var(--c-text3); margin-bottom:10px; }
-.lost-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.lost-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
 .lost-item { text-align:center; }
-.lost-val { font-size:17px; font-weight:700; color:var(--c-text); }
+.lost-val { font-size:15px; font-weight:700; color:var(--c-text); white-space:nowrap; }
 .lost-lbl { font-size:11px; color:var(--c-text3); margin-top:2px; }
 .macro-card { padding:14px; }
 .macro-val { font-size:18px; font-weight:600; color:var(--c-text); }
