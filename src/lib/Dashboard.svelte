@@ -318,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.3";
+  const BUILD = "V9.4";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -696,16 +696,17 @@
     <div class="caption" style="margin-top:8px">Déficit total du programme réalisé, mais avec MON ratio de macros moyen (protéines actuelles) · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg · % MG final estimé : {pBfEnd.toFixed(1).replace('.', ',')}%</div>
   </div>
 
-  {@const oFat = progStats.totalCible * 0.90 / 7700 * 1000}
+  {@const oReste = Math.max(0, progStats.totalCible - progStats.defKcalPos)}
+  {@const oFat = fatLost.g + oReste * 0.90 / 7700 * 1000}
   {@const oWater = 1750}
-  {@const oMusc = 0}
-  {@const oWEnd = pW0 - (oFat + oWater) / 1000}
+  {@const oMusc = fatLost.realMuscleG}
+  {@const oWEnd = pW0 - (oFat + oMusc + oWater) / 1000}
   {@const oBfEnd = oWEnd > 0 ? Math.max(0, (pFatInit - oFat / 1000) / oWEnd * 100) : fatLost.bf}
   <div class="card lost-card">
-    <div class="section-title-inline">Projection en suivant le programme à la lettre (J{totalDays})</div>
+    <div class="section-title-inline">Projection si je passe à 152 g dès maintenant (J{totalDays})</div>
     <div class="lost-grid">
       <div class="lost-item">
-        <div class="lost-val">−{((oFat + oWater) / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-val">−{((oFat + oMusc + oWater) / 1000).toFixed(1).replace('.', ',')} kg</div>
         <div class="lost-lbl">Poids perdu</div>
       </div>
       <div class="lost-item">
@@ -713,7 +714,7 @@
         <div class="lost-lbl">Gras perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-red)">−{(oMusc / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-val" style="color:var(--c-red)">−{(oMusc / 1000).toFixed(2).replace('.', ',')} kg</div>
         <div class="lost-lbl">Muscle perdu</div>
       </div>
       <div class="lost-item">
@@ -721,7 +722,7 @@
         <div class="lost-lbl">% MG perdu</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Même déficit total, protéines à la cible (152 g/j) : ~90 % du déficit sur le gras, muscle ~préservé (perte = eau/glycogène ~1,75 kg) · % MG final estimé : {oBfEnd.toFixed(1).replace('.', ',')}%</div>
+    <div class="caption" style="margin-top:8px">Passé réel conservé + reste du programme avec protéines à la cible (152 g/j, ~90 % du déficit sur le gras) · eau/glycogène ~1,75 kg · % MG final estimé : {oBfEnd.toFixed(1).replace('.', ',')}%</div>
   </div>
   {/if}
 
