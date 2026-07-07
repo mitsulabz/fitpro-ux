@@ -318,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.0";
+  const BUILD = "V9.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -654,7 +654,7 @@
         <div class="lost-lbl">Muscle perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - fatLost.bfNow).toFixed(1).replace('.', ',')} pt</div>
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - fatLost.bfNow).toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG perdu</div>
       </div>
     </div>
@@ -674,7 +674,7 @@
   {@const pWEnd = pW0 - (pFat + pLean) / 1000}
   {@const pBfEnd = pWEnd > 0 ? Math.max(0, (pFatInit - pFat / 1000) / pWEnd * 100) : fatLost.bf}
   <div class="card lost-card">
-    <div class="section-title-inline">Projection fin de programme (J{totalDays})</div>
+    <div class="section-title-inline">Projection à mes macros actuelles (J{totalDays})</div>
     <div class="lost-grid">
       <div class="lost-item">
         <div class="lost-val">−{((pFat + pLean) / 1000).toFixed(1).replace('.', ',')} kg</div>
@@ -689,11 +689,41 @@
         <div class="lost-lbl">Muscle perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - pBfEnd).toFixed(1).replace('.', ',')} pt</div>
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - pBfEnd).toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG perdu</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Extrapolation au déficit total programmé, au même ratio de macros qu'aujourd'hui · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg · % MG final estimé : {pBfEnd.toFixed(1).replace('.', ',')}%</div>
+    <div class="caption" style="margin-top:8px">Déficit total du programme réalisé, mais avec MON ratio de macros moyen (protéines actuelles) · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg · % MG final estimé : {pBfEnd.toFixed(1).replace('.', ',')}%</div>
+  </div>
+
+  {@const oFat = progStats.totalCible * 0.90 / 7700 * 1000}
+  {@const oLean = progStats.totalCible * 0.10 / 1850 * 1000}
+  {@const oWaterRaw = oLean * 0.80}
+  {@const oWater = Math.min(oWaterRaw, 1750)}
+  {@const oMusc = oLean * 0.20 + (oWaterRaw - oWater)}
+  {@const oWEnd = pW0 - (oFat + oLean) / 1000}
+  {@const oBfEnd = oWEnd > 0 ? Math.max(0, (pFatInit - oFat / 1000) / oWEnd * 100) : fatLost.bf}
+  <div class="card lost-card">
+    <div class="section-title-inline">Projection en suivant le programme à la lettre (J{totalDays})</div>
+    <div class="lost-grid">
+      <div class="lost-item">
+        <div class="lost-val">−{((oFat + oLean) / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(oFat / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Gras perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-red)">−{(oMusc / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Muscle perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - oBfEnd).toFixed(1).replace('.', ',')} %</div>
+        <div class="lost-lbl">% MG perdu</div>
+      </div>
+    </div>
+    <div class="caption" style="margin-top:8px">Même déficit total, mais protéines à la cible (152 g/j) : ~90 % du déficit pris sur le gras · % MG final estimé : {oBfEnd.toFixed(1).replace('.', ',')}%</div>
   </div>
   {/if}
 
