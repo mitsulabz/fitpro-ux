@@ -318,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.5";
+  const BUILD = "V9.6";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -658,6 +658,10 @@
         <div class="lost-lbl">% MG perdu</div>
       </div>
       <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-blue)">{((nfp(profile.weight) || 100) - totalLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids</div>
+      </div>
+      <div class="lost-item">
         <div class="lost-val" style="color:var(--c-blue)">{fatLost.bfNow.toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG</div>
       </div>
@@ -697,6 +701,10 @@
         <div class="lost-lbl">% MG perdu</div>
       </div>
       <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-blue)">{pWEnd.toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids</div>
+      </div>
+      <div class="lost-item">
         <div class="lost-val" style="color:var(--c-blue)">{pBfEnd.toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG</div>
       </div>
@@ -728,6 +736,10 @@
       <div class="lost-item">
         <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - oBfEnd).toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-blue)">{oWEnd.toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids</div>
       </div>
       <div class="lost-item">
         <div class="lost-val" style="color:var(--c-blue)">{oBfEnd.toFixed(1).replace('.', ',')} %</div>
@@ -947,9 +959,9 @@
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
 .lost-card { padding:14px; margin-bottom:10px; }
 .section-title-inline { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.06em; color:var(--c-text3); margin-bottom:10px; }
-.lost-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+.lost-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 6px; }
 .lost-item { text-align:center; }
-.lost-val { font-size:13px; font-weight:700; color:var(--c-text); white-space:nowrap; }
+.lost-val { font-size:15px; font-weight:700; color:var(--c-text); white-space:nowrap; }
 .lost-lbl { font-size:11px; color:var(--c-text3); margin-top:2px; }
 .macro-card { padding:14px; }
 .macro-val { font-size:18px; font-weight:600; color:var(--c-text); }
