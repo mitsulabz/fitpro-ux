@@ -22,7 +22,7 @@
 
   let { dayKey, onclose }: { dayKey: string; onclose: () => void } = $props();
 
-  let tab = $state<'search' | 'scan' | 'favorites' | 'manual' | 'ai'>('search');
+  let tab = $state<'search' | 'scan' | 'favorites' | 'manual' | 'ai'>('favorites');
 
   // Recherche OFF
   let query = $state('');
