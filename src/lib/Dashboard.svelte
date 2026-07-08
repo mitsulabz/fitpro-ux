@@ -276,7 +276,7 @@
     // plancher J1 : on ne montre rien avant le premier jour du programme
     const j1 = progJours.length ? parseJour(progJours[0].jour) : null;
     const j1Time = j1 ? j1.getTime() : -Infinity;
-    for (let i = 1; i <= 30; i++) {
+    for (let i = 1; i <= 366; i++) {
       const d = new Date(todayDate);
       d.setDate(d.getDate() - i);
       if (d.getTime() < j1Time) break; // avant le J1 du programme
@@ -309,7 +309,6 @@
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
       const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
       result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
-      if (result.length >= 14) break;
     }
     return result;
   });
@@ -318,7 +317,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.8";
+  const BUILD = "V9.9";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
