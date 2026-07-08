@@ -318,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.7";
+  const BUILD = "V9.8";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -787,7 +787,10 @@
       <div class="foods-list">
         {#each foods as food, i}
           <div class="food-item">
-            <span class="food-n">{food.n}</span>
+            <div class="food-nm">
+              <span class="food-n">{food.n}</span>
+              <span class="food-m">P {Math.round(food.p ?? 0)}g · G {Math.round(food.g ?? 0)}g · L {Math.round(food.l ?? 0)}g</span>
+            </div>
             <span class="food-k">{Math.round(food.k)} kcal</span>
             <button class="food-del" onclick={() => removeFood(i)} aria-label="Supprimer">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -877,7 +880,10 @@
     <div class="hist-foods">
       {#each day.foods as f, fi}
       <div class="hist-food-row">
-        <span class="food-n">{f.n}</span>
+        <div class="food-nm">
+          <span class="food-n">{f.n}</span>
+          <span class="food-m">P {Math.round(f.p ?? 0)}g · G {Math.round(f.g ?? 0)}g · L {Math.round(f.l ?? 0)}g</span>
+        </div>
         <span class="food-k">{Math.round(f.k)} kcal</span>
         <button class="food-del" onclick={() => removeFood(fi, day.key)} aria-label="Supprimer">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -981,7 +987,9 @@
 .sport-extra-unit { font-size:12px; color:var(--c-text3); white-space:nowrap; }
 .foods-list { display:flex; flex-direction:column; gap:0; }
 .food-item { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:0.5px solid var(--c-border); }
-.food-n { flex:1; font-size:13px; color:var(--c-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.food-nm { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.food-n { font-size:13px; color:var(--c-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.food-m { font-size:10px; color:var(--c-text3); white-space:nowrap; }
 .food-k { font-size:12px; font-weight:500; color:var(--c-text2); flex-shrink:0; }
 .food-del { border:none; background:none; color:var(--c-text3); cursor:pointer; padding:2px; display:flex; align-items:center; }
 .food-del:hover { color:var(--c-red,#e05); }
