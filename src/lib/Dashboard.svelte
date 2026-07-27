@@ -308,7 +308,22 @@
       const expend = tdee + extraKcal;
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
       const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
-      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre });
+      // grammes de poids perdus/pris ce jour (meme modele que les cellules kg perdus)
+      let gramsLost: number | null = null;
+      if (deficit !== null) {
+        if (deficit > 0) {
+          const pTargetDay = 1.6 * (nfp(profile.weight) || 100);
+          const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, sp / pTargetDay)) : 1;
+          const fatFrac = 0.70 + 0.20 * ratio;
+          const gFat = deficit * fatFrac / 7700 * 1000;
+          const gLean = deficit * (1 - fatFrac) / 1850 * 1000;
+          gramsLost = Math.round(gFat + gLean);
+        } else {
+          // surplus : stockage majoritairement en gras
+          gramsLost = -Math.round(Math.abs(deficit) / 7700 * 1000);
+        }
+      }
+      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gramsLost });
     }
     return result;
   });
@@ -317,7 +332,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V9.9";
+  const BUILD = "V10.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -873,7 +888,7 @@
         {/if}
       </div>
       {#if day.foods.length}
-      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{/if}</div>
+      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{#if !day.neutre && day.gramsLost !== null} · <span style="font-weight:600;color:{day.gramsLost >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">{day.gramsLost >= 0 ? '−' + day.gramsLost : '+' + Math.abs(day.gramsLost)} g</span>{/if}{/if}</div>
       {/if}
     </summary>
     <div class="hist-foods">
