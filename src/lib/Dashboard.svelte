@@ -323,10 +323,9 @@
           gMuscle = -Math.round(leanG * muscleFrac);
           gWater = -Math.round(leanG * (1 - muscleFrac));
         } else {
-          // prise : surtout gras + un peu de glycogene/eau, muscle ~0
-          const gain = -deficit;
-          gFat = Math.round(gain * 0.80 / 7700 * 1000);
-          gWater = Math.round(gain * 0.20 / 1850 * 1000);
+          // prise : le durable = gras. L'eau/glycogene est transitoire, on ne la compte pas.
+          gFat = Math.round(-deficit / 7700 * 1000);
+          gWater = 0;
           gMuscle = 0;
         }
       }
@@ -339,7 +338,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V10.1";
+  const BUILD = "V10.2";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -895,7 +894,7 @@
         {/if}
       </div>
       {#if day.foods.length}
-      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{#if !day.neutre && day.gFat !== null}<span class="grams-detail"><span style="color:var(--c-green)">{day.gFat <= 0 ? '−' : '+'}{Math.abs(day.gFat)}g gras</span> · <span style="color:var(--c-red)">{day.gMuscle <= 0 ? '−' : '+'}{Math.abs(day.gMuscle)}g muscle</span> · <span style="color:var(--c-blue)">{day.gWater <= 0 ? '−' : '+'}{Math.abs(day.gWater)}g eau</span></span>{/if}{/if}</div>
+      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{#if !day.neutre && day.gFat !== null}<span class="grams-detail"><span style="color:var(--c-green)">{day.gFat < 0 ? '−' : day.gFat > 0 ? '+' : ''}{Math.abs(day.gFat)}g gras</span>{#if day.gMuscle !== 0} · <span style="color:var(--c-red)">{day.gMuscle < 0 ? '−' : '+'}{Math.abs(day.gMuscle)}g muscle</span>{/if}{#if day.gWater !== 0} · <span style="color:var(--c-blue)">{day.gWater < 0 ? '−' : '+'}{Math.abs(day.gWater)}g eau</span>{/if}</span>{/if}{/if}</div>
       {/if}
     </summary>
     <div class="hist-foods">
