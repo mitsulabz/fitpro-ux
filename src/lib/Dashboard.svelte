@@ -308,22 +308,29 @@
       const expend = tdee + extraKcal;
       const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
       const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
-      // grammes de poids perdus/pris ce jour (meme modele que les cellules kg perdus)
-      let gramsLost: number | null = null;
+      // detail des grammes perdus/pris ce jour (meme modele que les cellules kg perdus)
+      // signe : negatif = perdu, positif = pris
+      let gMuscle: number | null = null, gFat: number | null = null, gWater: number | null = null;
       if (deficit !== null) {
         if (deficit > 0) {
+          // perte : part gras (proteines) + part masse maigre (muscle vs eau)
           const pTargetDay = 1.6 * (nfp(profile.weight) || 100);
           const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, sp / pTargetDay)) : 1;
           const fatFrac = 0.70 + 0.20 * ratio;
-          const gFat = deficit * fatFrac / 7700 * 1000;
-          const gLean = deficit * (1 - fatFrac) / 1850 * 1000;
-          gramsLost = Math.round(gFat + gLean);
+          const leanG = deficit * (1 - fatFrac) / 1850 * 1000;
+          const muscleFrac = 0.20 + 0.40 * (1 - ratio);
+          gFat = -Math.round(deficit * fatFrac / 7700 * 1000);
+          gMuscle = -Math.round(leanG * muscleFrac);
+          gWater = -Math.round(leanG * (1 - muscleFrac));
         } else {
-          // surplus : stockage majoritairement en gras
-          gramsLost = -Math.round(Math.abs(deficit) / 7700 * 1000);
+          // prise : surtout gras + un peu de glycogene/eau, muscle ~0
+          const gain = -deficit;
+          gFat = Math.round(gain * 0.80 / 7700 * 1000);
+          gWater = Math.round(gain * 0.20 / 1850 * 1000);
+          gMuscle = 0;
         }
       }
-      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gramsLost });
+      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gMuscle, gFat, gWater });
     }
     return result;
   });
@@ -332,7 +339,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V10.0";
+  const BUILD = "V10.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -888,7 +895,7 @@
         {/if}
       </div>
       {#if day.foods.length}
-      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{#if !day.neutre && day.gramsLost !== null} · <span style="font-weight:600;color:{day.gramsLost >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">{day.gramsLost >= 0 ? '−' + day.gramsLost : '+' + Math.abs(day.gramsLost)} g</span>{/if}{/if}</div>
+      <div class="hist-macros">P {Math.round(day.p)}g · G {Math.round(day.g)}g · L {Math.round(day.l)}g{#if day.deficit !== null} · <span style="font-weight:600;color:{day.neutre ? 'var(--c-blue)' : (day.deficit >= 0 ? 'var(--c-green)' : 'var(--c-red)')}">{day.neutre ? 'neutre' : (day.deficit >= 0 ? 'déficit −' + day.deficit.toLocaleString('fr') : 'surplus +' + Math.abs(day.deficit).toLocaleString('fr'))}</span>{#if !day.neutre && day.gFat !== null}<span class="grams-detail"><span style="color:var(--c-green)">{day.gFat <= 0 ? '−' : '+'}{Math.abs(day.gFat)}g gras</span> · <span style="color:var(--c-red)">{day.gMuscle <= 0 ? '−' : '+'}{Math.abs(day.gMuscle)}g muscle</span> · <span style="color:var(--c-blue)">{day.gWater <= 0 ? '−' : '+'}{Math.abs(day.gWater)}g eau</span></span>{/if}{/if}</div>
       {/if}
     </summary>
     <div class="hist-foods">
@@ -1030,6 +1037,7 @@
 .hist-summary { display:flex; flex-direction:column; gap:3px; padding:12px 14px; cursor:pointer; list-style:none; }
 .hist-top { display:flex; align-items:center; gap:8px; }
 .hist-macros { font-size:11px; color:var(--c-text3); }
+.grams-detail { display:block; margin-top:2px; font-weight:600; }
 .hist-summary::-webkit-details-marker { display:none; }
 .hist-date { flex:1; font-size:13px; font-weight:500; color:var(--c-text); text-transform:capitalize; }
 .hist-kcal { font-size:13px; font-weight:600; flex-shrink:0; }
