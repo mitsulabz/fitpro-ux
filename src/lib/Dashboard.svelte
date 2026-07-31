@@ -338,7 +338,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V10.2";
+  const BUILD = "V10.3";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -439,6 +439,9 @@
     { key: 'b12', label: 'B12' },
     { key: 'mag1', label: 'Magnésium 1' },
     { key: 'mag2', label: 'Magnésium 2' },
+    { key: 'curcumine', label: 'Curcumine' },
+    { key: 'coq10', label: 'CoQ10' },
+    { key: 'vitc', label: 'Vitamine C' },
   ];
   async function toggleSupp(key: string) {
     const s = get(session); const data = get(appData) as any;
