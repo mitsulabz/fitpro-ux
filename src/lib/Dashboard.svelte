@@ -113,7 +113,7 @@
     const sexFloor = profile.sex === 'f' ? 1200 : 1500;
     const minIntake = Math.max(Math.round(bmr), sexFloor);
     let totalCible = 0, realBrule = 0, expectedSoFar = 0;
-    let fatKcal = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
+    let fatKcal = 0, leanKcalDef = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
       const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -126,31 +126,33 @@
       const fds = dd.foods ?? [];
       const eaten = fds.reduce((s: number, f: any) => s + (f.k||0), 0);
       const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
-      if (jd0.getTime() === todayDate.getTime()) {
-        // jour en cours : prorata horaire (depense au prorata de l'heure - mange jusqu'a maintenant)
-        // depense du jour (base + activite du jour) au prorata de l'heure ; sport sup. compte en entier ; - mange aujourd'hui
-        realBrule += (Math.round(tdee * dayFrac) + (dd.extraKcal ?? 0)) - eaten;
-        expectedSoFar += cible * dayFrac;
-      }
-      if (jd0 < todayDate && eaten > 0) {
-        const def = (tdee + (dd.extraKcal ?? 0)) - eaten;
-        realBrule += def;
-        expectedSoFar += cible;
-        if (def > 0) {
-          const pDay = fds.reduce((s: number, f: any) => s + (f.p||0), 0);
-          const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, pDay / pTargetDay)) : 1;
-          const fatFrac = 0.70 + 0.20 * ratio; // 0.70 (0 proteines) -> 0.90 (cible atteinte)
-          fatKcal += def * fatFrac;
-          defKcalPos += def;
-          protEaten += pDay;
-          protTarget += pTargetDay;
-          protShortfall += Math.max(0, pTargetDay - pDay); // g de proteines manquantes (jours en deficit)
-        }
+      const isToday = jd0.getTime() === todayDate.getTime();
+      const isPastLogged = jd0 < todayDate && eaten > 0;
+      if (!isToday && !isPastLogged) return;
+      const frac = isToday ? dayFrac : 1; // jour en cours : prorata horaire
+      const def = (Math.round(tdee * frac) + (dd.extraKcal ?? 0)) - eaten; // signe : + deficit, - surplus
+      realBrule += def;
+      expectedSoFar += cible * frac;
+      if (def > 0) {
+        // jour en deficit : perte de gras + masse maigre selon les proteines
+        const pDay = fds.reduce((s: number, f: any) => s + (f.p||0), 0);
+        const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, pDay / pTargetDay)) : 1;
+        const fatFrac = 0.70 + 0.20 * ratio; // 0.70 (0 proteines) -> 0.90 (cible atteinte)
+        fatKcal += def * fatFrac;
+        leanKcalDef += def * (1 - fatFrac);
+        defKcalPos += def;
+        protEaten += pDay;
+        protTarget += pTargetDay;
+        protShortfall += Math.max(0, pTargetDay - pDay);
+      } else {
+        // jour en surplus : re-stocke du gras (~85 %, le reste = thermogenese) ; le muscle n'est PAS regagne sans muscu
+        fatKcal += def * 0.85; // def < 0 -> retire du gras net
       }
     });
-    const fatShare = defKcalPos > 0 ? fatKcal / defKcalPos : 0.9;
+    fatKcal = Math.max(0, fatKcal); // gras NET (deficit - surplus), coherent avec realBrule
+    const fatShare = (fatKcal + leanKcalDef) > 0 ? fatKcal / (fatKcal + leanKcalDef) : 0.9;
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
-    return { totalCible, realBrule, expectedSoFar, fatKcal, fatShare, protPct, defKcalPos, protShortfall };
+    return { totalCible, realBrule, expectedSoFar, fatKcal, leanKcalDef, fatShare, protPct, defKcalPos, protShortfall };
   });
   const progressPct = $derived(progStats.totalCible > 0
     ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
@@ -162,46 +164,24 @@
   }
   const fatLost = $derived.by(() => {
     const w = nfp(profile.weight), bf = nfp(profile.bf);
-    const fatKcal = Math.max(0, progStats.fatKcal);
-    const defPos = Math.max(0, progStats.defKcalPos);
-    if (!w || !bf || fatKcal <= 0) return null;
+    if (!w || !bf) return null;
+    const fatKcal = Math.max(0, progStats.fatKcal);      // gras net
+    const leanKcal = Math.max(0, progStats.leanKcalDef); // masse maigre perdue (jours en deficit)
+    if (fatKcal <= 0 && leanKcal <= 0) return null;
     const kg = fatKcal / 7700;
-    const fatInit = w * bf / 100;
-    const fatNow = Math.max(0, fatInit - kg);
-    const wNow = w - kg;
-    const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
-    const idealG = Math.round((defPos * 0.90) / 7700 * 1000); // macros parfaites : ~90% en gras
-    // Muscle reel = energie du gras NON perdu (vs macros optimales), convertie en muscle humide.
-    // Couple directement a l'ecart de gras -> toujours coherent energetiquement.
-    const muscleKcal = Math.max(0, defPos * 0.90 - fatKcal); // kcal venus de la masse maigre au lieu du gras
-    const leanG = Math.round(muscleKcal / 1850 * 1000); // masse maigre humide (muscle + eau/glycogene)
+    const leanG = Math.round(leanKcal / 1850 * 1000); // masse maigre humide (muscle + eau/glycogene)
     // Part de VRAI muscle : 20 % (proteines a la cible) -> 60 % (loin de la cible)
     const ratio = Math.max(0, Math.min(1, progStats.protPct));
     let realMuscleG = Math.round(leanG * (0.20 + 0.40 * (1 - ratio)));
     let waterG = leanG - realMuscleG;
-    // L'eau/glycogene est un STOCK (~1,75 kg max), pas un flux : l'excedent est du muscle
-    const WATER_CAP = 1750;
+    const WATER_CAP = 1750; // l'eau/glycogene est un STOCK, l'excedent devient du muscle
     if (waterG > WATER_CAP) { realMuscleG += waterG - WATER_CAP; waterG = WATER_CAP; }
-    return { g: Math.round(kg * 1000), idealG, leanG, realMuscleG, waterG, bf, bfNow: +bfNow.toFixed(1) };
-  });
-  // Projection a la fin du programme (extrapolation du rythme actuel)
-  const proj = $derived.by(() => {
-    if (!fatLost) return null;
-    const w = nfp(profile.weight), bf = nfp(profile.bf);
-    const defPos = Math.max(0, progStats.defKcalPos);
-    if (!w || !bf || defPos <= 0 || progStats.totalCible <= 0) return null;
-    const last = progJours[progJours.length - 1];
-    const endD = last ? parseJour(last.jour) : null;
-    const endStr = endD ? endD.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }) : '—';
-    const scale = progStats.totalCible / defPos; // du realise-so-far au total programme
+    const totalLostKg = kg + leanG / 1000;
     const fatInit = w * bf / 100;
-    // reel
-    const fatR = (fatLost.g / 1000) * scale, muscR = (fatLost.realMuscleG / 1000) * scale;
-    const wR = w - fatR - muscR, bfR = wR > 0 ? (fatInit - fatR) / wR * 100 : bf;
-    // optimal
-    const fatO = (fatLost.idealG / 1000) * scale;
-    const wO = w - fatO, bfO = wO > 0 ? (fatInit - fatO) / wO * 100 : bf;
-    return { endStr, wR: wR.toFixed(1), bfR: bfR.toFixed(1), wO: wO.toFixed(1), bfO: bfO.toFixed(1) };
+    const fatNow = Math.max(0, fatInit - kg);
+    const wNow = w - totalLostKg;
+    const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
+    return { g: Math.round(kg * 1000), leanG, realMuscleG, waterG, bf, bfNow: +bfNow.toFixed(1) };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function effDeficit(j: any): number {
@@ -338,7 +318,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V10.4";
+  const BUILD = "V10.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -693,8 +673,8 @@
   </div>
   {/if}
 
-  {#if fatLost && progStats.defKcalPos > 0 && progStats.totalCible > 0}
-  {@const pScale = progStats.totalCible / progStats.defKcalPos}
+  {#if fatLost && progStats.expectedSoFar > 0 && progStats.totalCible > 0}
+  {@const pScale = progStats.totalCible / progStats.expectedSoFar}
   {@const pFat = fatLost.g * pScale}
   {@const pLean = fatLost.leanG * pScale}
   {@const pWaterRaw = fatLost.waterG * pScale}
@@ -732,10 +712,10 @@
         <div class="lost-lbl">% MG</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Déficit total du programme réalisé, mais avec MON ratio de macros moyen (protéines actuelles) · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
+    <div class="caption" style="margin-top:8px">Si je garde ce rythme et mes macros actuelles jusqu'à la fin du programme · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
   </div>
 
-  {@const oReste = Math.max(0, progStats.totalCible - progStats.defKcalPos)}
+  {@const oReste = Math.max(0, progStats.totalCible - progStats.expectedSoFar)}
   {@const oFat = fatLost.g + oReste * 0.90 / 7700 * 1000}
   {@const oWater = 1750}
   {@const oMusc = fatLost.realMuscleG}
