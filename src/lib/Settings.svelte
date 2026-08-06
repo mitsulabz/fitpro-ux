@@ -1,6 +1,7 @@
 <script lang="ts">
   import { theme, t, session, appData, persistSession } from "./store";
   import { saveAppState } from "./supabase";
+  import { calcBMR } from "./calc";
 
   function toggleTheme() { theme.update(v => v === "dark" ? "light" : "dark"); }
 
@@ -32,7 +33,7 @@
   let fileInput: HTMLInputElement;
 
   // ── Profil editable ──
-  let pf = $state({ weight: '', bf: '', bft: '', height: '', age: '', sex: 'h', act: '1.2' });
+  let pf = $state({ weight: '', bf: '', bft: '', height: '', age: '', sex: 'h', act: '1.2', bmrManual: '' });
   let pfLoaded = false;
   let profileStatus = $state('');
   $effect(() => {
@@ -42,6 +43,7 @@
         weight: String(p.weight ?? ''), bf: String(p.bf ?? ''), bft: String(p.bft ?? ''),
         height: String(p.height ?? ''), age: String(p.age ?? ''),
         sex: p.sex ?? 'h', act: String(p.act ?? '1.2'),
+        bmrManual: String(p.bmrManual ?? ''),
       };
       pfLoaded = true;
     }
@@ -51,7 +53,8 @@
     if (!s || !data) return;
     profileStatus = 'Sauvegarde…';
     const newData = { ...data, profile: { ...(data.profile ?? {}),
-      weight: pf.weight, bf: pf.bf, bft: pf.bft, height: pf.height, age: pf.age, sex: pf.sex } };
+      weight: pf.weight, bf: pf.bf, bft: pf.bft, height: pf.height, age: pf.age, sex: pf.sex,
+      bmrManual: pf.bmrManual } };
     appData.set(newData);
     try { await saveAppState(s.access_token, s.user.id, newData); profileStatus = '✓ Profil enregistré'; }
     catch { profileStatus = 'Erreur de sauvegarde'; }
@@ -129,6 +132,8 @@
     <label class="pf-row"><span>Taille (cm)</span><input type="number" bind:value={pf.height} /></label>
     <label class="pf-row"><span>Âge</span><input type="number" bind:value={pf.age} /></label>
     <label class="pf-row"><span>Sexe</span><select bind:value={pf.sex}><option value="h">Homme</option><option value="f">Femme</option></select></label>
+    <label class="pf-row"><span>BMR réel (kcal/j)</span><input type="number" inputmode="numeric" step="10" placeholder={String(calcBMR({ weight: pf.weight, bf: pf.bf, height: pf.height, age: pf.age, sex: pf.sex }))} bind:value={pf.bmrManual} /></label>
+    <p class="pf-hint">Métabolisme de base. Laisse vide pour l'estimation automatique ({Math.round(calcBMR({ weight: pf.weight, bf: pf.bf, height: pf.height, age: pf.age, sex: pf.sex }))} kcal). Une valeur saisie ici remplace le calcul dans TOUTES les projections.</p>
     <button class="card save-btn" onclick={saveProfile}>Enregistrer le profil</button>
     {#if profileStatus}<div class="import-status" class:success={profileStatus.startsWith('✓')}>{profileStatus}</div>{/if}
   </div>
@@ -172,7 +177,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V10.3</div>
+  <div class="version caption">FitProX · V10.4</div>
 </div>
 
 <style>
@@ -192,6 +197,7 @@
 .profile-form { display:flex; flex-direction:column; gap:6px; }
 .pf-row { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--c-surface); border:0.5px solid var(--c-border); border-radius:var(--r-md); padding:10px 14px; }
 .pf-row span { font-size:14px; color:var(--c-text); }
+.pf-hint { font-size:11px; color:var(--c-text3); margin:2px 2px 0; line-height:1.4; }
 .pf-row input, .pf-row select { width:110px; padding:6px 8px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-bg); color:var(--c-text); font-size:14px; text-align:right; font-family:var(--font); }
 .pf-row input:focus, .pf-row select:focus { outline:none; border-color:var(--c-accent); }
 .save-btn { text-align:center; justify-content:center; padding:12px; background:var(--c-accent); color:var(--c-accent-fg); border:none; font-size:14px; font-weight:600; cursor:pointer; font-family:var(--font); border-radius:var(--r-md); }

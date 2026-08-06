@@ -5,6 +5,8 @@ export function nf(v: any): number { return parseFloat(String(v ?? '').replace('
 
 // BMR : Katch-McArdle si %MG connu, sinon Mifflin-St-Jeor
 export function calcBMR(p: any): number {
+  const manual = nf(p?.bmrManual);
+  if (manual > 0) return manual; // BMR mesuré/saisi manuellement = priorité
   const w = nf(p?.weight) || 100, h = nf(p?.height) || 180, age = nf(p?.age) || 40;
   const bf = nf(p?.bf);
   if (bf > 0) return 370 + 21.6 * w * (1 - bf / 100);
