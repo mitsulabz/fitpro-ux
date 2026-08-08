@@ -27,6 +27,23 @@
       return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal: (an && an !== 'Libre') ? (acts[an] ?? 0) : 0, libre: an === 'Libre', logged: fds.length > 0 };
     };
     const tl: any = buildTimeline({ dateList: dl, settingsLog: log, todayTime: nowMs, dayFrac: 1, info });
+    // cohérence mensuelle : déficit cumulé vs perte de poids mesurée
+    const _MO = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+    const byMonth: any = {};
+    for (const r of tl.list as any[]) {
+      if (!r.logged || r.deficit == null || r.isFuture) continue;
+      const dt = new Date(r.t);
+      const key = dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0');
+      if (!byMonth[key]) byMonth[key] = { def: 0, days: 0, recs: [] };
+      byMonth[key].def += r.deficit; byMonth[key].days++; byMonth[key].recs.push(r);
+    }
+    const reconciliation = Object.keys(byMonth).sort().map((k) => {
+      const m = byMonth[k]; const wp = m.recs.filter((r: any) => r.pm7 != null);
+      const first = wp[0], last = wp[wp.length - 1];
+      const actualKg = (first && last) ? +(first.pm7 - last.pm7).toFixed(2) : null;
+      const pa = k.split('-');
+      return { label: _MO[+pa[1] - 1] + ' ' + pa[0].slice(2), days: m.days, avgDef: Math.round(m.def / m.days), expectedKg: +(m.def / 7700).toFixed(2), actualKg };
+    });
     // pesées réelles + poids ajusté (glycogène)
     const pts: { t: number; w: number; f: number | null; adj: number | null }[] = [];
     for (const k of Object.keys(days)) {
@@ -60,7 +77,7 @@
     };
     const _t = new Date();
     const todayMs = Date.UTC(_t.getFullYear(), _t.getMonth(), _t.getDate());
-    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave, measured: pts, todayMs });
+    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave, measured: pts, todayMs, reconciliation });
   });
 </script>
 

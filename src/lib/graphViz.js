@@ -48,6 +48,7 @@ export function initGraphViz(root, seed) {
 
   root.innerHTML = `<div class="wrap">
 <h1>Poids — historique & prévisionnel</h1>
+<section id="reconSec"><h2>Cohérence : déficit ↔ poids réel</h2><div class="h2sub">Ton déficit cumulé colle-t-il à ta perte de poids mesurée, mois par mois ?</div><div id="reconTbl"></div></section>
 <section id="histSec">
 <h2>Historique réel</h2>
 <div class="h2sub">Tes pesées et masse grasse saisies dans Suivi · 16 juin → 31 juillet 2026</div>
@@ -304,6 +305,17 @@ export function initGraphViz(root, seed) {
     hit.addEventListener('touchstart',e=>move(e.touches[0]));
     hit.addEventListener('touchmove',e=>{move(e.touches[0]);e.preventDefault();},{passive:false});
   }
+
+  { const rec = seed.reconciliation || []; const rt = document.getElementById('reconTbl'); const rs = document.getElementById('reconSec');
+    if (!rec.length) { if (rs) rs.style.display = 'none'; }
+    else if (rt) {
+      rt.innerHTML = `<table><thead><tr><th>Mois</th><th>Jours</th><th>Déficit moy/j</th><th>Perte attendue</th><th>Perte réelle</th><th>Écart</th></tr></thead><tbody>`
+        + rec.map(m => { const gap = (m.actualKg != null) ? +(m.actualKg - m.expectedKg).toFixed(2) : null;
+            const col = gap == null ? 'var(--text-muted)' : (Math.abs(gap) < 0.4 ? 'var(--text-secondary)' : (gap > 0 ? '#2e9e5b' : 'var(--s2)'));
+            return `<tr><td>${m.label}</td><td>${m.days}</td><td>${m.avgDef} kcal</td><td>−${m.expectedKg.toFixed(2).replace('.',',')} kg</td><td>${m.actualKg != null ? '−' + m.actualKg.toFixed(2).replace('.',',') + ' kg' : '—'}</td><td style="color:${col};font-weight:600">${gap != null ? (gap > 0 ? '+' : '−') + Math.abs(gap).toFixed(2).replace('.',',') + ' kg' : '—'}</td></tr>`;
+          }).join('') + `</tbody></table>`
+        + `<p class="note" style="margin-top:10px">« Perte attendue » = déficit cumulé du mois ÷ 7700 kcal/kg. Écart <b style="color:#2e9e5b">vert</b> = tu perds <b>plus</b> que prévu (déficit sous-estimé, ou eau qui part). Écart <b style="color:var(--s2)">orange</b> = tu perds <b>moins</b> (tu sous-estimes ce que tu manges, ou tu retiens de l'eau ce mois-là). Proche de 0 = tes calculs collent.</p>`;
+    } }
 
   if (seed.history && seed.history.length >= 2) {
     const HP = histPanel('H', seed.history);
