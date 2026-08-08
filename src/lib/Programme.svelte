@@ -124,23 +124,37 @@
   });
   // Projection poids + MG au dernier jour : historique reel (passe loggé) + cibles du programme (futur)
   const endProj = $derived.by(() => {
-    const w = nf(profile.weight), bf = nf(profile.bf);
-    if (!w || !bf || progJours.length === 0) return null;
-    let totalDef = 0;
+    if (progJours.length === 0) return null;
+    const data = $appData as any;
+    const dd = data?.days ?? {};
+    // pesées mesurées (poids + %MG) — même base que la projection du Suivi
+    const meas: any[] = [];
+    for (const k of Object.keys(dd)) {
+      const d: any = dd[k]; const w = nf(d?.weight), bf = nf(d?.bf);
+      if (w > 0 && bf > 0) { const pr = k.split('/').map(Number); if (pr.length === 3) meas.push({ t: new Date(pr[2], pr[1]-1, pr[0]).getTime(), w, bf, fat: w * bf / 100 }); }
+    }
+    meas.sort((a, b) => a.t - b.t);
+    if (meas.length < 1) return null;
+    const start = meas[0], now = meas[meas.length - 1];
+    const fatLostKg = start.fat - now.fat;
+    // futFrac = déficit programme restant / réalisé
+    let done = 0, total = 0;
     for (const r of (timeline as any).list) {
       const dayExp = r.base + r.sportK;
       const cible = r.libre ? 0 : Math.max(0, Math.round(Math.min(dayExp * 0.25, dayExp - 1700)));
-      if (!r.isFuture && !r.isToday && r.deficit != null) totalDef += r.deficit; // reel passe (moteur)
-      else totalDef += cible;
+      total += cible;
+      if (!r.isFuture && r.deficit != null) done += cible;
     }
-    const fatKg = Math.max(0, totalDef) / 7700;
-    const fatInit = w * bf / 100;
-    const endW = w - fatKg;
-    const endBf = endW > 0 ? (fatInit - fatKg) / endW * 100 : bf;
+    const futFrac = done > 0 ? Math.max(0, (total - done) / done) : 0;
+    const futFatKg = Math.max(0, fatLostKg) * futFrac;
+    const endW = now.w - futFatKg;
+    const endFat = now.fat - futFatKg;
+    const endBf = endW > 0 ? Math.max(0, endFat / endW * 100) : now.bf;
+    const totFatKg = start.fat - endFat;
     const last = progJours[progJours.length - 1];
     const endD = last ? parseJour(last.jour) : null;
     const endStr = endD ? endD.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }) : '—';
-    return { endStr, kg: endW.toFixed(1), bf: endBf.toFixed(1), lost: fatKg.toFixed(1) };
+    return { endStr, kg: endW.toFixed(1), bf: endBf.toFixed(1), lost: totFatKg.toFixed(1) };
   });
   const totalDays  = $derived(progJours.length);
   const progIdx    = $derived(progJours.findIndex((j: any) => {
