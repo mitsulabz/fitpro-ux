@@ -13,7 +13,7 @@ export function initGraphViz(root, seed) {
   let adapt = true, mode = 'app';
 
   const PER = [
-    {id:'A', titre:'Août 2026', t0:Date.UTC(2026,7,6), t1:Date.UTC(2026,8,1), daily:true,
+    {id:'A', titre:'Août 2026', t0:Date.UTC(2026,7,1), t1:Date.UTC(2026,8,1), daily:true,
      note:'jour par jour · routine actuelle', app:1900, def:500,
      acts:[{n:'Vélo elliptique 40 min',k:450,j:7},{n:'Musculation',k:160,j:0}]},
     {id:'B', titre:'Septembre → 1er novembre 2026', t0:Date.UTC(2026,8,1), t1:Date.UTC(2026,10,1), daily:true,
@@ -25,8 +25,15 @@ export function initGraphViz(root, seed) {
   ];
 
   root.innerHTML = `<div class="wrap">
-<h1>Prévisionnel — poids et masse grasse</h1>
-<p class="sub">Point de départ : <strong>${W0.toFixed(2).replace('.',',')} kg · ${F0.toFixed(1).replace('.',',')} kg de masse grasse (${(F0/W0*100).toFixed(1).replace('.',',')} %)</strong>. Trois périodes indépendantes — chacune a ses propres activités et son propre apport, et repart de l'état atteint à la fin de la précédente.</p>
+<h1>Poids — historique & prévisionnel</h1>
+<section id="histSec">
+<h2>Historique réel</h2>
+<div class="h2sub">Tes pesées et masse grasse saisies dans Suivi · 16 juin → 31 juillet 2026</div>
+<div class="cw" id="histCw"></div>
+<div class="legend"><span><span class="sw" style="border-color:var(--s1)"></span>poids</span><span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span></div>
+</section>
+<h2 style="margin:30px 0 2px">Prévisionnel</h2>
+<p class="sub">À partir de ta dernière pesée : <strong>${W0.toFixed(2).replace('.',',')} kg · ${F0.toFixed(1).replace('.',',')} kg de masse grasse (${(F0/W0*100).toFixed(1).replace('.',',')} %)</strong>. Trois périodes indépendantes — chacune a ses activités et son apport, et repart de l'état atteint à la fin de la précédente.</p>
 <p class="ctl" style="margin:0 0 20px;flex-wrap:wrap">
 <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="chkAdapt" checked> Thermogenèse adaptative (12 % du déficit)</label>
 <span style="margin-left:20px">Je choisis <span class="seg" id="segMode" style="display:inline-flex;vertical-align:middle"></span></span></p>
@@ -200,6 +207,72 @@ export function initGraphViz(root, seed) {
     hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;crs.style.opacity=0;h.forEach(c=>c.style.opacity=0);});
     hit.addEventListener('touchstart',e=>move(e.touches[0]));
     hit.addEventListener('touchmove',e=>{move(e.touches[0]);e.preventDefault();},{passive:false});
+  }
+
+  function histPanel(id,C){
+    const W=940,PL=54,PR=104,PT=34,PH=155,GAP=48,PB=32;
+    const t0=C[0].t,t1=C[C.length-1].t;
+    const X=t=>PL+(t1===t0?0:(t-t0)/(t1-t0)*(W-PL-PR));
+    const S=[];
+    const SER=[['Poids','w','var(--s1)','kg'],['Masse grasse','f','var(--s2)','kg']];
+    const n=Math.max(1,Math.round((t1-t0)/DAY/8)); let ticks=[];
+    for(let t=t0;t<=t1;t+=DAY){const d=new Date(t); if(d.getUTCDate()===1||t===t0||t===t1||(n>=2&&(d.getUTCDate()===15||(n<=3&&d.getUTCDate()%10===0)))) ticks.push(t);}
+    const yy=[];
+    SER.forEach((se,pi)=>{
+      const key=se[1],top=PT+pi*(PH+GAP);
+      const vals=C.map(p=>p[key]).filter(v=>v!=null);
+      if(!vals.length){yy.push(()=>top+PH); return;}
+      const lo0=Math.min(...vals),hi0=Math.max(...vals);
+      const m=(hi0-lo0)*0.25||0.5, lo=lo0-m, hi=hi0+m;
+      const Y=v=>top+PH-(v-lo)/(hi-lo)*PH; yy.push(Y);
+      S.push(`<text x="${PL}" y="${top-8}" class="pt">${se[0]}<tspan class="pu"> — ${se[2+1]}</tspan></text>`);
+      const step=(hi-lo)>9?4:((hi-lo)>4.5?2:((hi-lo)>2.2?1:0.5));
+      for(let v=Math.ceil(lo/step)*step;v<hi;v+=step){
+        S.push(`<line x1="${PL}" x2="${W-PR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="gr"/>`);
+        S.push(`<text x="${PL-8}" y="${(Y(v)+4).toFixed(1)}" class="tk" text-anchor="end">${(+v.toFixed(1)).toString().replace('.',',')}</text>`);
+      }
+      ticks.forEach(t=>S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="grv"/>`));
+      const pline=C.filter(p=>p[key]!=null).map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ');
+      S.push(`<polyline points="${pline}" fill="none" stroke="${se[2]}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`);
+      C.forEach(p=>{ if(p[key]!=null) S.push(`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p[key]).toFixed(1)}" r="2.6" fill="${se[2]}"/>`);});
+      const pres=C.filter(p=>p[key]!=null),last=pres[pres.length-1],first=pres[0];
+      const fm=v=>v.toFixed(1).replace('.',',');
+      S.push(`<circle cx="${X(last.t).toFixed(1)}" cy="${Y(last[key]).toFixed(1)}" r="4.2" fill="${se[2]}" stroke="var(--surface-1)" stroke-width="2"/>`);
+      S.push(`<text x="${W-PR+11}" y="${(Y(last[key])+2).toFixed(1)}" class="dl">${fm(last[key])}<tspan class="pu"> ${se[3]}</tspan></text>`);
+      S.push(`<text x="${W-PR+11}" y="${(Y(last[key])+19).toFixed(1)}" class="dl0">${last[key]-first[key]>=0?'+':'−'}${Math.abs(last[key]-first[key]).toFixed(2).replace('.',',')} ${se[3]}</text>`);
+      S.push(`<text x="${PL+4}" y="${(Y(first[key])-10).toFixed(1)}" class="dl0">${fm(first[key])}</text>`);
+    });
+    const yb=PT+2*(PH+GAP)-GAP;
+    ticks.forEach(t=>S.push(`<text x="${X(t).toFixed(1)}" y="${yb+18}" class="tk" text-anchor="middle">${fshort(t)}</text>`));
+    S.push(`<line class="crs" id="${id}crs" x1="0" x2="0" y1="${PT-12}" y2="${yb}" style="opacity:0"/>`);
+    for(let i=0;i<2;i++) S.push(`<circle id="${id}h${i}" r="5" fill="var(--s${i+1})" stroke="var(--surface-1)" stroke-width="2" style="opacity:0"/>`);
+    S.push(`<rect id="${id}hit" x="${PL}" y="${PT-12}" width="${W-PL-PR}" height="${yb-PT+12}" fill="transparent"/>`);
+    return {svg:`<svg id="svg${id}" viewBox="0 0 ${W} ${yb+PB}" width="100%">${S.join('')}</svg>`,X,yy,W};
+  }
+  function histHover(id,C,P){
+    const svg=document.getElementById('svg'+id), tip=document.getElementById('tip'+id);
+    const hit=document.getElementById(id+'hit'),crs=document.getElementById(id+'crs');
+    const h=[0,1].map(i=>document.getElementById(id+'h'+i));
+    if(!hit) return;
+    const move=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)*P.W/r.width;
+      let best=C[0]; for(const p of C) if(Math.abs(P.X(p.t)-sx)<Math.abs(P.X(best.t)-sx)) best=p;
+      const x=P.X(best.t); crs.setAttribute('x1',x); crs.setAttribute('x2',x); crs.style.opacity=1;
+      [best.w,best.f].forEach((v,i)=>{ if(v==null){h[i].style.opacity=0;return;} h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
+      tip.innerHTML=`<b>${fdate(best.t)}</b><div><span><i style="background:var(--s1)"></i>Poids</span><span>${best.w.toFixed(2).replace('.',',')} kg</span></div>`+(best.f!=null?`<div><span><i style="background:var(--s2)"></i>Masse grasse</span><span>${best.f.toFixed(1).replace('.',',')} kg</span></div><div><span>Taux de graisse</span><span>${(100*best.f/best.w).toFixed(1).replace('.',',')} %</span></div>`:'');
+      const px=x*r.width/P.W;
+      tip.style.left=Math.min(Math.max(px+14,4),r.width-tip.offsetWidth-4)+'px'; tip.style.opacity=1;};
+    hit.addEventListener('mousemove',move);
+    hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;crs.style.opacity=0;h.forEach(c=>c.style.opacity=0);});
+    hit.addEventListener('touchstart',e=>move(e.touches[0]));
+    hit.addEventListener('touchmove',e=>{move(e.touches[0]);e.preventDefault();},{passive:false});
+  }
+
+  if (seed.history && seed.history.length >= 2) {
+    const HP = histPanel('H', seed.history);
+    document.getElementById('histCw').innerHTML = HP.svg + `<div class="tip" id="tipH"></div>`;
+    histHover('H', seed.history, HP);
+  } else {
+    const hs = document.getElementById('histSec'); if (hs) hs.style.display = 'none';
   }
 
   root.querySelector('#chkAdapt').addEventListener('change',e=>{adapt=e.target.checked;render();});

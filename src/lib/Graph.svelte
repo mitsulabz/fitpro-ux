@@ -8,12 +8,30 @@
   let root: HTMLDivElement;
 
   onMount(() => {
-    const p = (get(appData) as any)?.profile ?? {};
-    const W0 = nf(p.weight) || 97.95;
-    const bfp = nf(p.bf) || 30.5;
-    const F0 = +(W0 * bfp / 100).toFixed(1);
+    const data = (get(appData) as any) ?? {};
+    const p = data.profile ?? {};
+    const days = data.days ?? {};
+    const J1 = Date.UTC(2026, 5, 16);      // 16 juin 2026
+    const JULY31 = Date.UTC(2026, 6, 31);  // 31 juillet 2026
+    // pesées réelles saisies dans Suivi
+    const pts: { t: number; w: number; f: number | null }[] = [];
+    for (const k of Object.keys(days)) {
+      const d = days[k];
+      const w = nf(d?.weight); if (!w) continue;
+      const parts = k.split('/').map(Number); if (parts.length !== 3) continue;
+      const t = Date.UTC(parts[2], parts[1] - 1, parts[0]);
+      const bfv = nf(d?.bf);
+      pts.push({ t, w, f: bfv > 0 ? +(w * bfv / 100).toFixed(1) : null });
+    }
+    pts.sort((a, b) => a.t - b.t);
+    const history = pts.filter((pt) => pt.t >= J1 && pt.t <= JULY31);
+    // prévisionnel : part de la dernière pesée réelle (sinon profil, sinon défaut)
+    const last = pts[pts.length - 1];
+    const W0 = last?.w || nf(p.weight) || 97.95;
+    const lastBf = last && last.f ? (last.f / last.w * 100) : (nf(p.bf) || 30.5);
+    const F0 = +(W0 * lastBf / 100).toFixed(1);
     const BASE0 = Math.round((calcBMR(p) || 1650) * (nf(p.act) || 1.2)) || 2020;
-    initGraphViz(root, { W0, F0, BASE0 });
+    initGraphViz(root, { W0, F0, BASE0, history });
   });
 </script>
 
