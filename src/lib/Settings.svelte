@@ -33,32 +33,6 @@
   let fileInput: HTMLInputElement;
 
   // ── Profil editable ──
-  let pf = $state({ weight: '', bf: '', bft: '', act: '1.2', bmrManual: '' });
-  let pfLoaded = false;
-  let profileStatus = $state('');
-  $effect(() => {
-    const p = ($appData as any)?.profile;
-    if (p && !pfLoaded) {
-      pf = {
-        weight: String(p.weight ?? ''), bf: String(p.bf ?? ''), bft: String(p.bft ?? ''),
-        act: String(p.act ?? '1.2'),
-        bmrManual: String(p.bmrManual ?? ''),
-      };
-      pfLoaded = true;
-    }
-  });
-  async function saveProfile() {
-    const s = $session; const data = $appData as any;
-    if (!s || !data) return;
-    profileStatus = 'Sauvegarde…';
-    const newData = { ...data, profile: { ...(data.profile ?? {}),
-      weight: pf.weight, bf: pf.bf, bft: pf.bft,
-      bmrManual: pf.bmrManual } };
-    appData.set(newData);
-    try { await saveAppState(s.access_token, s.user.id, newData); profileStatus = '✓ Profil enregistré'; }
-    catch { profileStatus = 'Erreur de sauvegarde'; }
-    setTimeout(() => profileStatus = '', 2500);
-  }
 
   // ── v11 : base mesurée datée + recalibrage ──
   const _now = new Date(); _now.setHours(0,0,0,0);
@@ -178,14 +152,6 @@
     <div class="stitle">{$t.nav.reglages}</div>
   </div>
 
-  <div class="section-title">Profil</div>
-  <div class="section profile-form">
-    <label class="pf-row"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.weight} /></label>
-    <label class="pf-row"><span>Masse grasse (%)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.bf} /></label>
-    <button class="card save-btn" onclick={saveProfile}>Enregistrer le profil</button>
-    {#if profileStatus}<div class="import-status" class:success={profileStatus.startsWith('✓')}>{profileStatus}</div>{/if}
-  </div>
-
   <div class="section-title">Dépense mesurée (base)</div>
   <div class="section profile-form">
     <label class="pf-row"><span>Base mesurée (kcal/j)</span><input type="number" inputmode="numeric" step="10" bind:value={baseForm.baseRef} /></label>
@@ -241,7 +207,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V12.0</div>
+  <div class="version caption">FitProX · V12.1</div>
 </div>
 
 <style>

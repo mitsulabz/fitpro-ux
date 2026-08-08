@@ -113,9 +113,21 @@
        : Math.round(Math.max(APPORT_FLOOR, (todayRec.base + todayRec.sportK) * 0.75)))
     : 1850);
   const deficit = $derived(Math.round(macros.k) - tBrulees);
+  const curBody = $derived.by(() => {
+    const dd = (days as any) ?? {};
+    let last: any = null;
+    for (const k of Object.keys(dd)) {
+      const dy = dd[k]; const w = nf(dy?.weight); if (!(w > 0)) continue;
+      const pr = k.split('/').map(Number); if (pr.length !== 3) continue;
+      const t = new Date(pr[2], pr[1]-1, pr[0]).getTime();
+      if (!last || t > last.t) last = { t, w, bf: nf(dy?.bf) };
+    }
+    const pf: any = ($appData as any)?.profile ?? {};
+    return { w: last ? last.w : (nf(pf.weight) || 100), bf: last && last.bf > 0 ? last.bf : nf(pf.bf) };
+  });
   const mCible = $derived.by(() => {
-    const w = parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100;
-    const bf = parseFloat(String(($appData as any)?.profile?.bf ?? '').replace(',', '.')) || 0;
+    const w = curBody.w || 100;
+    const bf = curBody.bf || 0;
     const lean = bf > 0 ? w * (1 - bf / 100) : w * 0.75; // masse maigre
     const kcal = tIntake > 0 ? tIntake : 1850; // repli si pas de cible du jour
     const p = Math.round(2.2 * lean); // 2,2 g/kg de masse maigre (anti-fonte, contexte cortisone)
@@ -140,7 +152,7 @@
     return /libre/i.test(t) ? 'Libre' : t;
   }
   const progStats = $derived.by(() => {
-    const w = nfp(profile.weight) || 100;
+    const w = curBody.w || 100;
     const pTargetDay = 1.6 * w;
     let totalCible = 0, realBrule = 0, expectedSoFar = 0;
     let fatKcal = 0, leanKcalDef = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
@@ -303,7 +315,7 @@
       if (deficit !== null) {
         if (deficit > 0) {
           // perte : part gras (proteines) + part masse maigre (muscle vs eau)
-          const pTargetDay = 1.6 * (nfp(profile.weight) || 100);
+          const pTargetDay = 1.6 * (curBody.w || 100);
           const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, sp / pTargetDay)) : 1;
           const fatFrac = 0.70 + 0.20 * ratio;
           const leanG = deficit * (1 - fatFrac) / 1850 * 1000;
@@ -327,7 +339,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V12.0";
+  const BUILD = "V12.1";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
