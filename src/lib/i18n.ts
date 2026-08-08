@@ -4,6 +4,7 @@ const fr = {
   nav: {
     suivi: 'Suivi',
     programme: 'Programme',
+    graph: 'Graph',
     aliments: 'Aliments',
     amis: 'Amis',
     reglages: 'Profil',
@@ -44,6 +45,7 @@ const en: typeof fr = {
   nav: {
     suivi: 'Dashboard',
     programme: 'Programme',
+    graph: 'Graph',
     aliments: 'Foods',
     amis: 'Friends',
     reglages: 'Settings',

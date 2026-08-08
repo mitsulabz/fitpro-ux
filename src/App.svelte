@@ -5,6 +5,7 @@
   import BottomNav from "./lib/BottomNav.svelte";
   import Dashboard from "./lib/Dashboard.svelte";
   import Programme from "./lib/Programme.svelte";
+  import Graph from "./lib/Graph.svelte";
   import Aliments from "./lib/Aliments.svelte";
   import Amis from "./lib/Amis.svelte";
   import Settings from "./lib/Settings.svelte";
@@ -59,6 +60,7 @@
 {:else}
   {#if $activeTab === "suivi"}<Dashboard />{/if}
   {#if $activeTab === "programme"}<Programme />{/if}
+  {#if $activeTab === "graph"}<Graph />{/if}
   {#if $activeTab === "aliments"}
     <Aliments />
   {/if}

@@ -1,0 +1,207 @@
+// @ts-nocheck
+/* Prévisionnel — poids & masse grasse.
+   Porté de l'artefact Claude "Prévisionnel". root = conteneur ;
+   seed = { W0, F0, BASE0 } dérivés du profil FitProX (poids, %MG, BMR×facteur). */
+export function initGraphViz(root, seed) {
+  const W0 = seed.W0, F0 = seed.F0, L0 = W0 - F0;
+  const BASE0 = seed.BASE0, CW = 12, ADAPT = 0.12;
+  const KC = 7300, KLO = 6950, KHI = 7600, DAY = 86400000;
+  const COMP = [[Date.UTC(2026,8,19),"Chinon"],[Date.UTC(2026,8,27),"Nîmes"],[Date.UTC(2026,8,28),"Toulon"],
+    [Date.UTC(2026,9,10),"Monteux"],[Date.UTC(2026,9,11),""],[Date.UTC(2026,10,1),"TOULOUSE"]];
+  const OPTS = [0,100,200,300,400,500,600,700];
+  const OPTSA = [1400,1500,1600,1700,1800,1900,2000,2100,2200,2400];
+  let adapt = true, mode = 'app';
+
+  const PER = [
+    {id:'A', titre:'Août 2026', t0:Date.UTC(2026,7,6), t1:Date.UTC(2026,8,1), daily:true,
+     note:'jour par jour · routine actuelle', app:1900, def:500,
+     acts:[{n:'Vélo elliptique 40 min',k:450,j:7},{n:'Musculation',k:160,j:0}]},
+    {id:'B', titre:'Septembre → 1er novembre 2026', t0:Date.UTC(2026,8,1), t1:Date.UTC(2026,10,1), daily:true,
+     note:'jour par jour · saison · objectif Toulouse', app:1900, def:500,
+     acts:[{n:'Escrime — entraînement',k:963,j:2},{n:'Badminton 1h30',k:570,j:3},{n:'Full body + Z2 25 min',k:425,j:1}]},
+    {id:'C', titre:'Novembre 2026 → juillet 2027', t0:Date.UTC(2026,10,1), t1:Date.UTC(2027,6,1), daily:false,
+     note:'une valeur au 1er de chaque mois', app:2000, def:200,
+     acts:[{n:'Escrime — entraînement',k:963,j:2},{n:'Badminton 1h30',k:570,j:3},{n:'Full body + Z2 25 min',k:425,j:1}]}
+  ];
+
+  root.innerHTML = `<div class="wrap">
+<h1>Prévisionnel — poids et masse grasse</h1>
+<p class="sub">Point de départ : <strong>${W0.toFixed(2).replace('.',',')} kg · ${F0.toFixed(1).replace('.',',')} kg de masse grasse (${(F0/W0*100).toFixed(1).replace('.',',')} %)</strong>. Trois périodes indépendantes — chacune a ses propres activités et son propre apport, et repart de l'état atteint à la fin de la précédente.</p>
+<p class="ctl" style="margin:0 0 20px;flex-wrap:wrap">
+<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="chkAdapt" checked> Thermogenèse adaptative (12 % du déficit)</label>
+<span style="margin-left:20px">Je choisis <span class="seg" id="segMode" style="display:inline-flex;vertical-align:middle"></span></span></p>
+<div id="sections"></div>
+<p class="note"><strong>D'où vient la dépense.</strong> Elle n'est pas estimée par une formule mais mesurée : 51 jours d'apport (16 juin → 5 août) confrontés à 47 pesées, par ajustement aux moindres carrés. Résultat : <strong>≈ ${BASE0} kcal/jour hors sport</strong> au poids de départ, décroissant de 12 kcal par kg perdu. La même analyse montre que cette dépense a baissé d'environ 400 kcal en sept semaines — d'où l'option « thermogenèse adaptative », qui retire 12 % du déficit tenu.</p>
+<p class="note"><strong>Le coût des activités.</strong> Valeurs par défaut issues des séances réellement enregistrées (calories actives, nettes du repos) : vélo elliptique <strong>10,6 kcal/min</strong>, musculation <strong>3,6</strong>. Escrime : médiane de 15 soirées de 70 à 140 min = <strong>963 kcal nettes</strong>. Badminton : médiane 570 kcal pour 1h30. Tous les champs sont modifiables.</p>
+<p class="note"><strong>Ce que le modèle ne fait pas.</strong> L'apport est constant sur chaque période : ni affûtage, ni journées de compétition, ni refill. Les traits verticaux marquent les compétitions. La répartition gras/muscle suit les mesures — ~98 % de graisse à 30 % de masse grasse — et se dégrade jusqu'à 60 % vers 15 %. Le modèle s'arrête à 12 %.</p>
+</div>`;
+
+  const moy = L => L.reduce((s,a)=>s+(+a.k||0)*(+a.j||0),0)/7;
+  const fg = bf => Math.max(0.60, Math.min(0.98, 0.75+(bf-15)/15.8*0.23));
+
+  function sim(K){
+    let w=W0,f=F0,l=L0;
+    return PER.map(P=>{
+      const sp=moy(P.acts), C=[];
+      const brut=ww=>BASE0-CW*(W0-ww)+sp;
+      const dOf=ww=>{const bf=100*f/w; if(bf<=12) return 0;
+        return mode==='def'?P.def:(brut(ww)-P.app)/(adapt?1+ADAPT:1);};
+      let t=P.t0;
+      const push=()=>{const d=dOf(w); C.push({t,w,f,kcal:Math.round(brut(w)-(adapt?ADAPT*d:0)-d)});};
+      push();
+      while(t<P.t1){
+        const bf=100*f/w, d=dOf(w), dw=d/K, fr=fg(bf);
+        f-=dw*fr; l-=dw*(1-fr); w=f+l; t+=DAY;
+        if(P.daily) push();
+        else {const dt=new Date(t); if(dt.getUTCDate()===1) push();}
+      }
+      if(C[C.length-1].t!==P.t1){t=P.t1;push();}
+      return C;
+    });
+  }
+  const MO=['janv.','févr.','mars','avril','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  const fdate=t=>{const d=new Date(t);return d.getUTCDate()+' '+MO[d.getUTCMonth()]+' '+d.getUTCFullYear();};
+  const fshort=t=>{const d=new Date(t);return d.getUTCDate()+' '+MO[d.getUTCMonth()];};
+  const fmon=t=>{const d=new Date(t);return '1er '+MO[d.getUTCMonth()]+' '+(d.getUTCFullYear()===2027?'27':'26');};
+
+  function panel(id,C,LO,HI,daily){
+    const W=940,PL=54,PR=104,PT=34,PH=155,GAP=48,PB=32;
+    const t0=C[0].t,t1=C[C.length-1].t;
+    const X=t=>PL+(t1===t0?0:(t-t0)/(t1-t0)*(W-PL-PR));
+    const S=[];
+    const SER=[['Poids','w','var(--s1)',2,'kg'],['Masse grasse','f','var(--s2)',1,'kg'],['Apport','kcal','var(--s3)',0,'kcal']];
+    let ticks=[];
+    if(daily){ const n=Math.max(1,Math.round((t1-t0)/DAY/8));
+      for(let t=t0;t<=t1;t+=DAY){const d=new Date(t); if(d.getUTCDate()===1||t===t0||t===t1||(n>=2&&(d.getUTCDate()===15||(n<=3&&d.getUTCDate()%10===0)))) ticks.push(t);} }
+    else { ticks=C.map(p=>p.t).filter((_,i)=>i%2===0); if(ticks[ticks.length-1]!==t1) ticks.push(t1); }
+    const yy=[];
+    SER.forEach((se,pi)=>{
+      const key=se[1],top=PT+pi*(PH+GAP);
+      const vs=C.map(p=>p[key]), lo0=Math.min(...LO.map(p=>p[key]),...vs), hi0=Math.max(...HI.map(p=>p[key]),...vs);
+      const m=(hi0-lo0)*0.20||(se[3]===0?60:0.5), lo=lo0-m, hi=hi0+m;
+      const Y=v=>top+PH-(v-lo)/(hi-lo)*PH; yy.push(Y);
+      S.push(`<text x="${PL}" y="${top-8}" class="pt">${se[0]}<tspan class="pu"> — ${se[4]}</tspan></text>`);
+      const step=se[3]===0?((hi-lo)>600?200:((hi-lo)>300?100:50)):((hi-lo)>9?4:((hi-lo)>4.5?2:((hi-lo)>2.2?1:0.5)));
+      for(let v=Math.ceil(lo/step)*step;v<hi;v+=step){
+        S.push(`<line x1="${PL}" x2="${W-PR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="gr"/>`);
+        S.push(`<text x="${PL-8}" y="${(Y(v)+4).toFixed(1)}" class="tk" text-anchor="end">${(+v.toFixed(1)).toString().replace('.',',')}</text>`);
+      }
+      ticks.forEach(t=>S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="grv"/>`));
+      if(pi===1){ [20,15].forEach(p=>{ const vv=C.map(c=>c.f/c.w*100), idx=vv.findIndex(x=>x<=p);
+          if(idx>0){ const v=C[idx].f; if(v>lo&&v<hi){
+            S.push(`<line x1="${PL}" x2="${W-PR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="ref"/>`);
+            S.push(`<text x="${W-PR-4}" y="${(Y(v)-4).toFixed(1)}" class="reftx" text-anchor="end">${p} % de masse grasse</text>`);}}});}
+      S.push(`<polygon points="${HI.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')} ${LO.slice().reverse().map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="var(--band)" stroke="none"/>`);
+      S.push(`<polyline points="${C.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="none" stroke="${se[2]}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`);
+      if(!daily) C.forEach(p=>S.push(`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p[key]).toFixed(1)}" r="3.1" fill="${se[2]}"/>`));
+      COMP.forEach(([t,lab])=>{ if(t>=t0&&t<=t1){
+        S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="${lab==='TOULOUSE'?'obj':'cmp'}"/>`);
+        if(pi===0&&lab){const k=COMP.findIndex(c=>c[0]===t);
+          S.push(`<text x="${X(t).toFixed(1)}" y="${top-(k%2?26:15)}" class="cmptx" text-anchor="middle">${lab}</text>`);}}});
+      const last=C[C.length-1][key], first=C[0][key];
+      const fm=v=>se[3]===2?v.toFixed(2).replace('.',','):(se[3]===0?Math.round(v).toString():v.toFixed(1).replace('.',','));
+      S.push(`<circle cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="4.4" fill="${se[2]}" stroke="var(--surface-1)" stroke-width="2"/>`);
+      S.push(`<text x="${W-PR+11}" y="${(Y(last)+2).toFixed(1)}" class="dl">${fm(last)}<tspan class="pu"> ${se[4]}</tspan></text>`);
+      S.push(`<text x="${W-PR+11}" y="${(Y(last)+19).toFixed(1)}" class="dl0">${last-first>=0?'+':'−'}${se[3]===0?Math.round(Math.abs(last-first)):Math.abs(last-first).toFixed(2).replace('.',',')} ${se[4]}</text>`);
+      S.push(`<text x="${PL+4}" y="${(Y(first)-10).toFixed(1)}" class="dl0">${fm(first)}</text>`);
+    });
+    const yb=PT+3*(PH+GAP)-GAP;
+    ticks.forEach(t=>S.push(`<text x="${X(t).toFixed(1)}" y="${yb+18}" class="tk" text-anchor="middle">${daily?fshort(t):fmon(t)}</text>`));
+    S.push(`<line class="crs" id="${id}crs" x1="0" x2="0" y1="${PT-12}" y2="${yb}" style="opacity:0"/>`);
+    for(let i=0;i<3;i++) S.push(`<circle id="${id}h${i}" r="5" fill="var(--s${i+1})" stroke="var(--surface-1)" stroke-width="2" style="opacity:0"/>`);
+    S.push(`<rect id="${id}hit" x="${PL}" y="${PT-12}" width="${W-PL-PR}" height="${yb-PT+12}" fill="transparent"/>`);
+    return {svg:`<svg id="svg${id}" viewBox="0 0 ${W} ${yb+PB}" width="100%">${S.join('')}</svg>`,X,yy,W};
+  }
+
+  function actsUI(L){
+    const rows=L.map((a,i)=>`<div class="ar">
+      <input class="nm" data-i="${i}" data-f="n" value="${(a.n||'').replace(/"/g,'&quot;')}" placeholder="nom de l'activité">
+      <input class="nb" data-i="${i}" data-f="k" type="number" step="10" min="0" value="${a.k}"><span class="u">kcal</span>
+      <input class="nb" data-i="${i}" data-f="j" type="number" step="1" min="0" max="7" value="${a.j}"><span class="u">j/sem.</span>
+      <button class="del" type="button" data-i="${i}" title="supprimer">×</button></div>`).join('');
+    return `<div class="ah"><span>Activités — coût net par séance</span><span>fréquence</span></div>${rows}
+      <div class="af"><button class="add" type="button">+ ajouter une activité</button>
+      <span class="tot">moyenne quotidienne <b>${Math.round(moy(L))}</b> kcal/jour</span></div>`;
+  }
+  function segHTML(opts,val){return opts.map(o=>`<button type="button" aria-pressed="${o[0]===val}" data-v="${o[0]}" style="min-width:auto;padding:5px 10px">${o[1]}</button>`).join('');}
+
+  function render(){
+    const cur=sim(KC), lo=sim(KHI), hi=sim(KLO);
+    document.getElementById('segMode').innerHTML=segHTML([['def','mon déficit'],['app','mon apport']],mode);
+    const host=document.getElementById('sections'); host.innerHTML='';
+    PER.forEach((P,pi)=>{
+      const C=cur[pi],a=C[0],b=C[C.length-1],sp=moy(P.acts);
+      const base=Math.round(BASE0-CW*(W0-a.w));
+      const def=Math.round(mode==='def'?P.def:(base+sp-a.kcal)/(adapt?1+ADAPT:1));
+      const ad=adapt?Math.round(ADAPT*def):0;
+      const bf=100*b.f/b.w, imc=b.w/3.24;
+      const O=mode==='def'?OPTS:OPTSA, val=mode==='def'?P.def:P.app;
+      const sec=document.createElement('section');
+      sec.innerHTML=`
+       <div class="shead">
+        <div><h2>${P.titre}</h2><div class="h2sub">${P.note} · ${Math.round(sp)} kcal/jour de sport en moyenne</div></div>
+        <div class="ctl">${mode==='def'?'Déficit':'Apport'} <div class="seg" data-seg="${pi}">${
+          O.map(o=>`<button type="button" aria-pressed="${o===val}" data-v="${o}">${o}</button>`).join('')}</div> kcal/jour</div>
+       </div>
+       <div class="acts" data-acts="${pi}">${actsUI(P.acts)}</div>
+       <p class="hyp"><b>Hypothèse :</b> base mesurée <b>${base}</b> kcal/j ${sp?`+ sport <b>${Math.round(sp)}</b> kcal/j en moyenne `:'<b>sans aucune activité</b> '}${ad?`− adaptation <b>${ad}</b> `:''}= dépense <b>${Math.round(base+sp-ad)}</b> kcal/j.
+         Apport <b>${a.kcal}</b> kcal → déficit réel <b>${def}</b> kcal/jour.${sp?` Une journée <em>sans</em> activité, la dépense tombe à <b>${base-ad}</b> et ce même apport ne donne plus que <b>${Math.round(base-ad-a.kcal)}</b> de déficit.`:''}</p>
+       <div class="kpis">
+        <div class="kpi"><div class="lab"><span class="dot" style="background:var(--s1)"></span>Au ${P.daily?fdate(b.t):fmon(b.t)}</div>
+         <div class="val">${b.w.toFixed(1).replace('.',',')}<small> kg</small></div><div class="d">${(b.w-a.w).toFixed(2).replace('.',',')} kg sur la période</div></div>
+        <div class="kpi"><div class="lab"><span class="dot" style="background:var(--s2)"></span>Masse grasse</div>
+         <div class="val">${b.f.toFixed(1).replace('.',',')}<small> kg</small></div><div class="d">${(b.f-a.f).toFixed(2).replace('.',',')} kg</div></div>
+        <div class="kpi"><div class="lab">Taux de graisse</div>
+         <div class="val">${bf.toFixed(1).replace('.',',')}<small> %</small>${bf<15?' <span class="warn">⚠︎</span>':''}</div><div class="d">${(bf-100*a.f/a.w).toFixed(1).replace('.',',')} pt</div></div>
+        <div class="kpi"><div class="lab">IMC</div><div class="val">${imc.toFixed(1).replace('.',',')}</div>
+         <div class="d">${imc<25?'poids normal':(imc<30?'surpoids':'obésité')}</div></div>
+       </div>
+       <div class="legend"><span><span class="sw" style="border-color:var(--s1)"></span>poids</span>
+        <span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span>
+        <span><span class="sw" style="border-color:var(--s3)"></span>apport</span>
+        <span><span class="swb"></span>incertitude (6 950 – 7 600 kcal/kg)</span>
+        ${P.daily?'<span style="opacity:.75">┊ compétitions</span>':''}</div>
+       <div class="cw"></div>
+       <details><summary>Voir le détail</summary><div class="tbl"></div></details>`;
+      host.appendChild(sec);
+      const PP=panel(P.id,C,lo[pi],hi[pi],P.daily);
+      const cw=sec.querySelector('.cw');
+      cw.innerHTML=PP.svg+`<div class="tip" id="tip${P.id}"></div>`;
+      sec.querySelector('.tbl').innerHTML=`<table><thead><tr><th>Date</th><th>Poids</th><th>Gras kg</th><th>Gras %</th><th>IMC</th><th>Apport</th></tr></thead><tbody>${
+        C.map(p=>`<tr><td>${P.daily?fdate(p.t):fmon(p.t)}</td><td>${p.w.toFixed(2).replace('.',',')}</td><td>${p.f.toFixed(1).replace('.',',')}</td><td>${(100*p.f/p.w).toFixed(1).replace('.',',')}</td><td>${(p.w/3.24).toFixed(1).replace('.',',')}</td><td>${p.kcal}</td></tr>`).join('')}</tbody></table>`;
+      hover(P.id,C,PP);
+      sec.querySelector('[data-seg]').onclick=e=>{const b2=e.target.closest('button'); if(!b2)return;
+        if(mode==='def')P.def=+b2.dataset.v; else P.app=+b2.dataset.v; render();};
+      const ae=sec.querySelector('[data-acts]');
+      ae.onchange=e=>{const t=e.target; if(!t.dataset||t.dataset.i===undefined)return;
+        const i=+t.dataset.i,f=t.dataset.f; P.acts[i][f]=f==='n'?t.value:Math.max(0,+t.value||0); render();};
+      ae.onclick=e=>{const d=e.target.closest('.del'); if(d){P.acts.splice(+d.dataset.i,1);render();return;}
+        if(e.target.closest('.add')){P.acts.push({n:'Nouvelle activité',k:400,j:1});render();}};
+    });
+    document.getElementById('segMode').onclick=e=>{const b=e.target.closest('button'); if(!b)return; mode=b.dataset.v; render();};
+  }
+  function hover(id,C,P){
+    const svg=document.getElementById('svg'+id), tip=document.getElementById('tip'+id);
+    const hit=document.getElementById(id+'hit'),crs=document.getElementById(id+'crs');
+    const h=[0,1,2].map(i=>document.getElementById(id+'h'+i));
+    if(!hit) return;
+    const move=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)*P.W/r.width;
+      let best=C[0]; for(const p of C) if(Math.abs(P.X(p.t)-sx)<Math.abs(P.X(best.t)-sx)) best=p;
+      const x=P.X(best.t); crs.setAttribute('x1',x); crs.setAttribute('x2',x); crs.style.opacity=1;
+      [best.w,best.f,best.kcal].forEach((v,i)=>{h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
+      tip.innerHTML=`<b>${fdate(best.t)}</b>
+        <div><span><i style="background:var(--s1)"></i>Poids</span><span>${best.w.toFixed(2).replace('.',',')} kg</span></div>
+        <div><span><i style="background:var(--s2)"></i>Masse grasse</span><span>${best.f.toFixed(1).replace('.',',')} kg</span></div>
+        <div><span>Taux de graisse</span><span>${(100*best.f/best.w).toFixed(1).replace('.',',')} %</span></div>
+        <div><span><i style="background:var(--s3)"></i>Apport</span><span>${best.kcal} kcal</span></div>`;
+      const px=x*r.width/P.W;
+      tip.style.left=Math.min(Math.max(px+14,4),r.width-tip.offsetWidth-4)+'px'; tip.style.opacity=1;};
+    hit.addEventListener('mousemove',move);
+    hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;crs.style.opacity=0;h.forEach(c=>c.style.opacity=0);});
+    hit.addEventListener('touchstart',e=>move(e.touches[0]));
+    hit.addEventListener('touchmove',e=>{move(e.touches[0]);e.preventDefault();},{passive:false});
+  }
+
+  root.querySelector('#chkAdapt').addEventListener('change',e=>{adapt=e.target.checked;render();});
+  render();
+}
