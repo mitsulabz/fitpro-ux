@@ -33,7 +33,7 @@
   let fileInput: HTMLInputElement;
 
   // ── Profil editable ──
-  let pf = $state({ weight: '', bf: '', bft: '', height: '', age: '', sex: 'h', act: '1.2', bmrManual: '' });
+  let pf = $state({ weight: '', bf: '', bft: '', act: '1.2', bmrManual: '' });
   let pfLoaded = false;
   let profileStatus = $state('');
   $effect(() => {
@@ -41,8 +41,7 @@
     if (p && !pfLoaded) {
       pf = {
         weight: String(p.weight ?? ''), bf: String(p.bf ?? ''), bft: String(p.bft ?? ''),
-        height: String(p.height ?? ''), age: String(p.age ?? ''),
-        sex: p.sex ?? 'h', act: String(p.act ?? '1.2'),
+        act: String(p.act ?? '1.2'),
         bmrManual: String(p.bmrManual ?? ''),
       };
       pfLoaded = true;
@@ -53,7 +52,7 @@
     if (!s || !data) return;
     profileStatus = 'Sauvegarde…';
     const newData = { ...data, profile: { ...(data.profile ?? {}),
-      weight: pf.weight, bf: pf.bf, bft: pf.bft, height: pf.height, age: pf.age, sex: pf.sex,
+      weight: pf.weight, bf: pf.bf, bft: pf.bft,
       bmrManual: pf.bmrManual } };
     appData.set(newData);
     try { await saveAppState(s.access_token, s.user.id, newData); profileStatus = '✓ Profil enregistré'; }
@@ -183,9 +182,6 @@
   <div class="section profile-form">
     <label class="pf-row"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.weight} /></label>
     <label class="pf-row"><span>Masse grasse (%)</span><input type="number" inputmode="decimal" step="0.1" bind:value={pf.bf} /></label>
-    <label class="pf-row"><span>Taille (cm)</span><input type="number" bind:value={pf.height} /></label>
-    <label class="pf-row"><span>Âge</span><input type="number" bind:value={pf.age} /></label>
-    <label class="pf-row"><span>Sexe</span><select bind:value={pf.sex}><option value="h">Homme</option><option value="f">Femme</option></select></label>
     <button class="card save-btn" onclick={saveProfile}>Enregistrer le profil</button>
     {#if profileStatus}<div class="import-status" class:success={profileStatus.startsWith('✓')}>{profileStatus}</div>{/if}
   </div>
@@ -245,7 +241,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V11.9</div>
+  <div class="version caption">FitProX · V12.0</div>
 </div>
 
 <style>
