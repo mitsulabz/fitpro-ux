@@ -331,7 +331,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V11.3";
+  const BUILD = "V11.4";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -645,21 +645,22 @@
   {/if}
 
   {#if fatLost && progStats.expectedSoFar > 0 && progStats.totalCible > 0}
-  {@const pScale = progStats.totalCible / progStats.expectedSoFar}
-  {@const pFat = fatLost.g * pScale}
-  {@const pLean = fatLost.leanG * pScale}
-  {@const pWaterRaw = fatLost.waterG * pScale}
-  {@const pWater = Math.min(pWaterRaw, 1750)}
-  {@const pMusc = fatLost.realMuscleG * pScale + (pWaterRaw - pWater)}
-  {@const pW0 = fatLost.startW}
-  {@const pFatInit = fatLost.startFat}
-  {@const pWEnd = pW0 - (pFat + pLean) / 1000}
-  {@const pBfEnd = pWEnd > 0 ? Math.max(0, (pFatInit - pFat / 1000) / pWEnd * 100) : fatLost.bf}
+  {@const futFrac = Math.max(0, (progStats.totalCible - progStats.expectedSoFar) / progStats.expectedSoFar)}
+  {@const ratioP = Math.max(0, Math.min(1, progStats.protPct))}
+  {@const futFatG = fatLost.g * futFrac}
+  {@const futLeanG = fatLost.leanG * futFrac}
+  {@const futMuscG = futLeanG * (0.20 + 0.40 * (1 - ratioP))}
+  {@const pFat = fatLost.g + futFatG}
+  {@const pMusc = fatLost.realMuscleG + futMuscG}
+  {@const pWater = Math.min(fatLost.waterG + (futLeanG - futMuscG), 1750)}
+  {@const pWEnd = fatLost.nowW - (futFatG + futLeanG) / 1000}
+  {@const pBfEnd = pWEnd > 0 ? Math.max(0, (fatLost.nowFat - futFatG / 1000) / pWEnd * 100) : fatLost.bfNow}
+  {@const pLostG = Math.round((fatLost.startW - pWEnd) * 1000)}
   <div class="card lost-card">
     <div class="section-title-inline">Projection à mes macros actuelles (J{totalDays})</div>
     <div class="lost-grid">
       <div class="lost-item">
-        <div class="lost-val">−{((pFat + pLean) / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-val">−{(pLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
         <div class="lost-lbl">Poids perdu</div>
       </div>
       <div class="lost-item">
@@ -686,17 +687,18 @@
     <div class="caption" style="margin-top:8px">Si je garde ce rythme et mes macros actuelles jusqu'à la fin du programme · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
   </div>
 
-  {@const oReste = Math.max(0, progStats.totalCible - progStats.expectedSoFar)}
-  {@const oFat = fatLost.g + oReste * 0.90 / 7700 * 1000}
-  {@const oWater = 1750}
+  {@const oFutFatG = fatLost.g * futFrac}
+  {@const oFat = fatLost.g + oFutFatG}
   {@const oMusc = fatLost.realMuscleG}
-  {@const oWEnd = pW0 - (oFat + oMusc + oWater) / 1000}
-  {@const oBfEnd = oWEnd > 0 ? Math.max(0, (pFatInit - oFat / 1000) / oWEnd * 100) : fatLost.bf}
+  {@const oWater = fatLost.waterG}
+  {@const oWEnd = fatLost.nowW - oFutFatG / 1000}
+  {@const oBfEnd = oWEnd > 0 ? Math.max(0, (fatLost.nowFat - oFutFatG / 1000) / oWEnd * 100) : fatLost.bfNow}
+  {@const oLostG = Math.round((fatLost.startW - oWEnd) * 1000)}
   <div class="card lost-card">
     <div class="section-title-inline">Projection si je passe à 152 g dès maintenant (J{totalDays})</div>
     <div class="lost-grid">
       <div class="lost-item">
-        <div class="lost-val">−{((oFat + oMusc + oWater) / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-val">−{(oLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
         <div class="lost-lbl">Poids perdu</div>
       </div>
       <div class="lost-item">
@@ -720,7 +722,7 @@
         <div class="lost-lbl">% MG</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Passé réel conservé + reste du programme avec protéines à la cible (152 g/j, ~90 % du déficit sur le gras) · eau/glycogène ~1,75 kg</div>
+    <div class="caption" style="margin-top:8px">Même rythme de gras, mais protéines à 152 g/j → 0 perte de muscle jusqu'à la fin (le muscle conservé fait baisser le %MG)</div>
   </div>
   {/if}
 
