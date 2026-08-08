@@ -222,11 +222,16 @@ export function initGraphViz(root, seed) {
       let best=C[0]; for(const p of C) if(Math.abs(P.X(p.t)-sx)<Math.abs(P.X(best.t)-sx)) best=p;
       const x=P.X(best.t); crs.setAttribute('x1',x); crs.setAttribute('x2',x); crs.style.opacity=1;
       [best.w,best.f,best.kcal].forEach((v,i)=>{h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
-      tip.innerHTML=`<b>${fdate(best.t)}</b>
+      let mReal='';
+      { let md=null,mdist=1.5*86400000; for(const m of MEAS){const dd=Math.abs(m.t-best.t); if(dd<mdist){mdist=dd; md=m;}}
+        if(md&&md.w!=null){ mReal=`<div style="border-top:1px solid var(--line);margin:5px 0 0;padding-top:5px;color:var(--text-secondary)">↓ ta mesure réelle (${fdate(md.t)})</div>`
+          +`<div><span><i style="background:var(--s1)"></i>Poids réel</span><span>${md.w.toFixed(2).replace('.',',')} kg</span></div>`
+          +(md.f!=null?`<div><span><i style="background:var(--s2)"></i>MG réelle</span><span>${md.f.toFixed(1).replace('.',',')} kg (${(100*md.f/md.w).toFixed(1).replace('.',',')} %)</span></div>`:''); } }
+      tip.innerHTML=`<b>${fdate(best.t)} — projeté</b>
         <div><span><i style="background:var(--s1)"></i>Poids</span><span>${best.w.toFixed(2).replace('.',',')} kg</span></div>
         <div><span><i style="background:var(--s2)"></i>Masse grasse</span><span>${best.f.toFixed(1).replace('.',',')} kg</span></div>
         <div><span>Taux de graisse</span><span>${(100*best.f/best.w).toFixed(1).replace('.',',')} %</span></div>
-        <div><span><i style="background:var(--s3)"></i>Apport</span><span>${best.kcal} kcal</span></div>`;
+        <div><span><i style="background:var(--s3)"></i>Apport</span><span>${best.kcal} kcal</span></div>`+mReal;
       const px=x*r.width/P.W;
       tip.style.left=Math.min(Math.max(px+14,4),r.width-tip.offsetWidth-4)+'px'; tip.style.opacity=1;};
     hit.addEventListener('mousemove',move);
