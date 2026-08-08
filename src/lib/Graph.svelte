@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { appData } from './store';
+  import { appData, session } from './store';
+  import { saveAppState } from './supabase';
   import { get } from 'svelte/store';
   import { nf } from './calc';
   import { buildTimeline, settingsFor, dsToMs, ADAPT_DEFAULT } from './engine';
@@ -49,7 +50,15 @@
     const lastRec = tl.list[tl.list.length - 1];
     const eau = lastRec ? lastRec.eauGlyco : 0;
     const waterBanner = Math.abs(eau) > 300 ? `~${Math.abs(eau)} g d'eau (glycogène) ${eau > 0 ? 'masquent' : 'exagèrent'} la tendance récente.` : '';
-    initGraphViz(root, { W0, F0, BASE0, history, waterBanner });
+    const saved = data.programme?.graphSettings ?? null;
+    const onSave = (state: any) => {
+      const ss = get(session); const d = get(appData) as any;
+      if (!ss || !d) return;
+      const nd = { ...d, programme: { ...(d.programme ?? {}), graphSettings: state } };
+      appData.set(nd);
+      saveAppState(ss.access_token, ss.user.id, nd);
+    };
+    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave });
   });
 </script>
 

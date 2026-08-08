@@ -24,6 +24,26 @@ export function initGraphViz(root, seed) {
      acts:[{n:'Escrime — entraînement',k:963,j:2},{n:'Badminton 1h30',k:570,j:3},{n:'Full body + Z2 25 min',k:425,j:1}]}
   ];
 
+  // applique les réglages sauvegardés (déficit/apport/activités/mode/adaptation)
+  if (seed.saved) {
+    if (seed.saved.mode) mode = seed.saved.mode;
+    if (typeof seed.saved.adapt === 'boolean') adapt = seed.saved.adapt;
+    if (Array.isArray(seed.saved.periods)) {
+      for (const sp of seed.saved.periods) {
+        const P = PER.find(x => x.id === sp.id);
+        if (P) {
+          if (typeof sp.def === 'number') P.def = sp.def;
+          if (typeof sp.app === 'number') P.app = sp.app;
+          if (Array.isArray(sp.acts)) P.acts = sp.acts.map(a => ({ n: a.n, k: +a.k || 0, j: +a.j || 0 }));
+        }
+      }
+    }
+  }
+  function saveState() {
+    if (typeof seed.onSave !== 'function') return;
+    seed.onSave({ mode, adapt, periods: PER.map(p => ({ id: p.id, def: p.def, app: p.app, acts: p.acts.map(a => ({ n: a.n, k: a.k, j: a.j })) })) });
+  }
+
   root.innerHTML = `<div class="wrap">
 <h1>Poids — historique & prévisionnel</h1>
 <section id="histSec">
@@ -179,14 +199,14 @@ export function initGraphViz(root, seed) {
         C.map(p=>`<tr><td>${P.daily?fdate(p.t):fmon(p.t)}</td><td>${p.w.toFixed(2).replace('.',',')}</td><td>${p.f.toFixed(1).replace('.',',')}</td><td>${(100*p.f/p.w).toFixed(1).replace('.',',')}</td><td>${(p.w/3.24).toFixed(1).replace('.',',')}</td><td>${p.kcal}</td></tr>`).join('')}</tbody></table>`;
       hover(P.id,C,PP);
       sec.querySelector('[data-seg]').onclick=e=>{const b2=e.target.closest('button'); if(!b2)return;
-        if(mode==='def')P.def=+b2.dataset.v; else P.app=+b2.dataset.v; render();};
+        if(mode==='def')P.def=+b2.dataset.v; else P.app=+b2.dataset.v; render(); saveState();};
       const ae=sec.querySelector('[data-acts]');
       ae.onchange=e=>{const t=e.target; if(!t.dataset||t.dataset.i===undefined)return;
-        const i=+t.dataset.i,f=t.dataset.f; P.acts[i][f]=f==='n'?t.value:Math.max(0,+t.value||0); render();};
-      ae.onclick=e=>{const d=e.target.closest('.del'); if(d){P.acts.splice(+d.dataset.i,1);render();return;}
-        if(e.target.closest('.add')){P.acts.push({n:'Nouvelle activité',k:400,j:1});render();}};
+        const i=+t.dataset.i,f=t.dataset.f; P.acts[i][f]=f==='n'?t.value:Math.max(0,+t.value||0); render(); saveState();};
+      ae.onclick=e=>{const d=e.target.closest('.del'); if(d){P.acts.splice(+d.dataset.i,1);render();saveState();return;}
+        if(e.target.closest('.add')){P.acts.push({n:'Nouvelle activité',k:400,j:1});render();saveState();}};
     });
-    document.getElementById('segMode').onclick=e=>{const b=e.target.closest('button'); if(!b)return; mode=b.dataset.v; render();};
+    document.getElementById('segMode').onclick=e=>{const b=e.target.closest('button'); if(!b)return; mode=b.dataset.v; render(); saveState();};
   }
   function hover(id,C,P){
     const svg=document.getElementById('svg'+id), tip=document.getElementById('tip'+id);
@@ -279,6 +299,6 @@ export function initGraphViz(root, seed) {
     const hs = document.getElementById('histSec'); if (hs) hs.style.display = 'none';
   }
 
-  root.querySelector('#chkAdapt').addEventListener('change',e=>{adapt=e.target.checked;render();});
+  root.querySelector('#chkAdapt').addEventListener('change',e=>{adapt=e.target.checked;render();saveState();});
   render();
 }
