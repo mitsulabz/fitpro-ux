@@ -58,7 +58,7 @@
       appData.set(nd);
       saveAppState(ss.access_token, ss.user.id, nd);
     };
-    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave });
+    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave, measured: pts });
   });
 </script>
 

@@ -11,6 +11,7 @@ export function initGraphViz(root, seed) {
   const OPTS = [0,100,200,300,400,500,600,700];
   const OPTSA = [1400,1500,1600,1700,1800,1900,2000,2100,2200,2400];
   let adapt = true, mode = 'app';
+  const MEAS = seed.measured || [];
 
   const PER = [
     {id:'A', titre:'Août 2026', t0:Date.UTC(2026,7,1), t1:Date.UTC(2026,8,1), daily:true,
@@ -105,7 +106,9 @@ export function initGraphViz(root, seed) {
     const yy=[];
     SER.forEach((se,pi)=>{
       const key=se[1],top=PT+pi*(PH+GAP);
-      const vs=C.map(p=>p[key]), lo0=Math.min(...LO.map(p=>p[key]),...vs), hi0=Math.max(...HI.map(p=>p[key]),...vs);
+      const vs=C.map(p=>p[key]);
+      const mvals=(key==='w'||key==='f')?MEAS.filter(m=>m.t>=t0&&m.t<=t1&&m[key]!=null).map(m=>m[key]):[];
+      const lo0=Math.min(...LO.map(p=>p[key]),...vs,...mvals), hi0=Math.max(...HI.map(p=>p[key]),...vs,...mvals);
       const m=(hi0-lo0)*0.20||(se[3]===0?60:0.5), lo=lo0-m, hi=hi0+m;
       const Y=v=>top+PH-(v-lo)/(hi-lo)*PH; yy.push(Y);
       S.push(`<text x="${PL}" y="${top-8}" class="pt">${se[0]}<tspan class="pu"> — ${se[4]}</tspan></text>`);
@@ -121,6 +124,7 @@ export function initGraphViz(root, seed) {
             S.push(`<text x="${W-PR-4}" y="${(Y(v)-4).toFixed(1)}" class="reftx" text-anchor="end">${p} % de masse grasse</text>`);}}});}
       S.push(`<polygon points="${HI.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')} ${LO.slice().reverse().map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="var(--band)" stroke="none"/>`);
       S.push(`<polyline points="${C.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="none" stroke="${se[2]}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`);
+      if(key==='w'||key==='f') MEAS.forEach(m=>{ const v=m[key]; if(v==null||m.t<t0||m.t>t1) return; S.push(`<circle cx="${X(m.t).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" fill="${se[2]}" stroke="var(--surface-1)" stroke-width="1.6"/>`); });
       if(!daily) C.forEach(p=>S.push(`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p[key]).toFixed(1)}" r="3.1" fill="${se[2]}"/>`));
       COMP.forEach(([t,lab])=>{ if(t>=t0&&t<=t1){
         S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="${lab==='TOULOUSE'?'obj':'cmp'}"/>`);
@@ -188,6 +192,7 @@ export function initGraphViz(root, seed) {
         <span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span>
         <span><span class="sw" style="border-color:var(--s3)"></span>apport</span>
         <span><span class="swb"></span>incertitude (6 950 – 7 600 kcal/kg)</span>
+        <span><span style="width:9px;height:9px;border-radius:50%;background:var(--text-secondary);border:2px solid var(--surface-1);display:inline-block"></span>tes pesées réelles</span>
         ${P.daily?'<span style="opacity:.75">┊ compétitions</span>':''}</div>
        <div class="cw"></div>
        <details><summary>Voir le détail</summary><div class="tbl"></div></details>`;
