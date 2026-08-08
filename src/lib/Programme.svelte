@@ -7,6 +7,7 @@
 
   const ACT_LEVELS = [
     { key:'1.10', label:'Bloqué au lit',                    desc:'×1.10 · maladie, < 2 000 pas/j' },
+    { key:'1.15', label:'Geek 2500 pas',                    desc:'×1.15 · très sédentaire · ~2 500 pas/j' },
     { key:'1.20', label:'Canap / bureau / voiture',         desc:'×1.20 · très sédentaire · 2–4k pas/j' },
     { key:'1.30', label:'Courses, tâches ménagères légères',desc:'×1.30 · bouge un peu · 4–6k pas/j' },
     { key:'1.40', label:"S'active quotidiennement",         desc:'×1.40 · beaucoup de déplacements · 6–9k pas/j' },
