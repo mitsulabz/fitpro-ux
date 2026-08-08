@@ -148,7 +148,7 @@ export function sundayRule(timeline, todayTime) {
   const lastS = sundays[sundays.length - 1];
   const v = evalSunday(lastS);
   if (v == null) return { show: false };
-  const kg7 = +v.toFixed(2);
+  const kg7 = +v.toFixed(2); const kg7s = String(kg7).replace(".", ",");
   if (v > 0.7) return { show: true, kg7, delta: +100, msg: `Perte rapide (${kg7s} kg/sem) — tu peux ajouter +100 kcal.` };
   if (v >= 0.35) return { show: true, kg7, delta: 0, msg: `Rythme idéal (${kg7s} kg/sem) — ne change rien.` };
   // v < 0.35 : suggérer -100 seulement si 2 dimanches consécutifs sous 0.35
