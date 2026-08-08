@@ -12,6 +12,7 @@ export function initGraphViz(root, seed) {
   const OPTSA = [1400,1500,1600,1700,1800,1900,2000,2100,2200,2400];
   let adapt = true, mode = 'app';
   const MEAS = seed.measured || [];
+  const TODAY = seed.todayMs || Date.UTC(2026,7,9);
 
   const PER = [
     {id:'A', titre:'Août 2026', t0:Date.UTC(2026,7,1), t1:Date.UTC(2026,8,1), daily:true,
@@ -75,16 +76,18 @@ export function initGraphViz(root, seed) {
       const brut=ww=>BASE0-CW*(W0-ww)+sp;
       const dOf=ww=>{const bf=100*f/w; if(bf<=12) return 0;
         return mode==='def'?P.def:(brut(ww)-P.app)/(adapt?1+ADAPT:1);};
-      let t=P.t0;
+      const startT=Math.max(P.t0,TODAY);
+      if(startT>=P.t1) return C; // periode deja passee : pas de projection (le reel suffit)
+      let t=startT;
       const push=()=>{const d=dOf(w); C.push({t,w,f,kcal:Math.round(brut(w)-(adapt?ADAPT*d:0)-d)});};
       push();
       while(t<P.t1){
         const bf=100*f/w, d=dOf(w), dw=d/K, fr=fg(bf);
         f-=dw*fr; l-=dw*(1-fr); w=f+l; t+=DAY;
         if(P.daily) push();
-        else {const dt=new Date(t); if(dt.getUTCDate()===1) push();}
+        else {const dt=new Date(t); if(dt.getUTCDate()===1&&t>startT) push();}
       }
-      if(C[C.length-1].t!==P.t1){t=P.t1;push();}
+      if(C.length&&C[C.length-1].t!==P.t1){t=P.t1;push();}
       return C;
     });
   }
@@ -93,9 +96,9 @@ export function initGraphViz(root, seed) {
   const fshort=t=>{const d=new Date(t);return d.getUTCDate()+' '+MO[d.getUTCMonth()];};
   const fmon=t=>{const d=new Date(t);return '1er '+MO[d.getUTCMonth()]+' '+(d.getUTCFullYear()===2027?'27':'26');};
 
-  function panel(id,C,LO,HI,daily){
+  function panel(id,C,LO,HI,daily,pT0,pT1){
     const W=940,PL=54,PR=104,PT=34,PH=155,GAP=48,PB=32;
-    const t0=C[0].t,t1=C[C.length-1].t;
+    const t0=pT0,t1=pT1;
     const X=t=>PL+(t1===t0?0:(t-t0)/(t1-t0)*(W-PL-PR));
     const S=[];
     const SER=[['Poids','w','var(--s1)',2,'kg'],['Masse grasse','f','var(--s2)',1,'kg'],['Apport','kcal','var(--s3)',0,'kcal']];
@@ -124,18 +127,21 @@ export function initGraphViz(root, seed) {
             S.push(`<text x="${W-PR-4}" y="${(Y(v)-4).toFixed(1)}" class="reftx" text-anchor="end">${p} % de masse grasse</text>`);}}});}
       S.push(`<polygon points="${HI.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')} ${LO.slice().reverse().map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="var(--band)" stroke="none"/>`);
       S.push(`<polyline points="${C.map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ')}" fill="none" stroke="${se[2]}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`);
+      if(key==='w'||key==='f'){ const mp=MEAS.filter(m=>m[key]!=null&&m.t>=t0&&m.t<=Math.min(t1,TODAY)).sort((a,b)=>a.t-b.t); if(mp.length>1) S.push(`<polyline points="${mp.map(m=>`${X(m.t).toFixed(1)},${Y(m[key]).toFixed(1)}`).join(' ')}" fill="none" stroke="${se[2]}" stroke-width="2" opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>`); }
       if(key==='w'||key==='f') MEAS.forEach(m=>{ const v=m[key]; if(v==null||m.t<t0||m.t>t1) return; S.push(`<circle cx="${X(m.t).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" fill="${se[2]}" stroke="var(--surface-1)" stroke-width="1.6"/>`); });
       if(!daily) C.forEach(p=>S.push(`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p[key]).toFixed(1)}" r="3.1" fill="${se[2]}"/>`));
       COMP.forEach(([t,lab])=>{ if(t>=t0&&t<=t1){
         S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="${lab==='TOULOUSE'?'obj':'cmp'}"/>`);
         if(pi===0&&lab){const k=COMP.findIndex(c=>c[0]===t);
           S.push(`<text x="${X(t).toFixed(1)}" y="${top-(k%2?26:15)}" class="cmptx" text-anchor="middle">${lab}</text>`);}}});
+      if(C.length){
       const last=C[C.length-1][key], first=C[0][key];
       const fm=v=>se[3]===2?v.toFixed(2).replace('.',','):(se[3]===0?Math.round(v).toString():v.toFixed(1).replace('.',','));
       S.push(`<circle cx="${X(t1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="4.4" fill="${se[2]}" stroke="var(--surface-1)" stroke-width="2"/>`);
       S.push(`<text x="${W-PR+11}" y="${(Y(last)+2).toFixed(1)}" class="dl">${fm(last)}<tspan class="pu"> ${se[4]}</tspan></text>`);
       S.push(`<text x="${W-PR+11}" y="${(Y(last)+19).toFixed(1)}" class="dl0">${last-first>=0?'+':'−'}${se[3]===0?Math.round(Math.abs(last-first)):Math.abs(last-first).toFixed(2).replace('.',',')} ${se[4]}</text>`);
       S.push(`<text x="${PL+4}" y="${(Y(first)-10).toFixed(1)}" class="dl0">${fm(first)}</text>`);
+      }
     });
     const yb=PT+3*(PH+GAP)-GAP;
     ticks.forEach(t=>S.push(`<text x="${X(t).toFixed(1)}" y="${yb+18}" class="tk" text-anchor="middle">${daily?fshort(t):fmon(t)}</text>`));
@@ -162,7 +168,7 @@ export function initGraphViz(root, seed) {
     document.getElementById('segMode').innerHTML=segHTML([['def','mon déficit'],['app','mon apport']],mode);
     const host=document.getElementById('sections'); host.innerHTML='';
     PER.forEach((P,pi)=>{
-      const C=cur[pi],a=C[0],b=C[C.length-1],sp=moy(P.acts);
+      const C=cur[pi],a=C[0]||{w:W0,f:F0,kcal:0,t:P.t0},b=C[C.length-1]||a,sp=moy(P.acts);
       const base=Math.round(BASE0-CW*(W0-a.w));
       const def=Math.round(mode==='def'?P.def:(base+sp-a.kcal)/(adapt?1+ADAPT:1));
       const ad=adapt?Math.round(ADAPT*def):0;
@@ -197,12 +203,12 @@ export function initGraphViz(root, seed) {
        <div class="cw"></div>
        <details><summary>Voir le détail</summary><div class="tbl"></div></details>`;
       host.appendChild(sec);
-      const PP=panel(P.id,C,lo[pi],hi[pi],P.daily);
+      const PP=panel(P.id,C,lo[pi],hi[pi],P.daily,P.t0,P.t1);
       const cw=sec.querySelector('.cw');
       cw.innerHTML=PP.svg+`<div class="tip" id="tip${P.id}"></div>`;
       sec.querySelector('.tbl').innerHTML=`<table><thead><tr><th>Date</th><th>Poids</th><th>Gras kg</th><th>Gras %</th><th>IMC</th><th>Apport</th></tr></thead><tbody>${
         C.map(p=>`<tr><td>${P.daily?fdate(p.t):fmon(p.t)}</td><td>${p.w.toFixed(2).replace('.',',')}</td><td>${p.f.toFixed(1).replace('.',',')}</td><td>${(100*p.f/p.w).toFixed(1).replace('.',',')}</td><td>${(p.w/3.24).toFixed(1).replace('.',',')}</td><td>${p.kcal}</td></tr>`).join('')}</tbody></table>`;
-      hover(P.id,C,PP);
+      if(C.length) hover(P.id,C,PP);
       sec.querySelector('[data-seg]').onclick=e=>{const b2=e.target.closest('button'); if(!b2)return;
         if(mode==='def')P.def=+b2.dataset.v; else P.app=+b2.dataset.v; render(); saveState();};
       const ae=sec.querySelector('[data-acts]');

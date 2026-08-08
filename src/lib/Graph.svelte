@@ -58,7 +58,9 @@
       appData.set(nd);
       saveAppState(ss.access_token, ss.user.id, nd);
     };
-    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave, measured: pts });
+    const _t = new Date();
+    const todayMs = Date.UTC(_t.getFullYear(), _t.getMonth(), _t.getDate());
+    initGraphViz(root, { W0, F0, BASE0, history, waterBanner, saved, onSave, measured: pts, todayMs });
   });
 </script>
 
