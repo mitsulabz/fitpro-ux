@@ -149,11 +149,11 @@ export function sundayRule(timeline, todayTime) {
   const v = evalSunday(lastS);
   if (v == null) return { show: false };
   const kg7 = +v.toFixed(2);
-  if (v > 0.7) return { show: true, kg7, delta: +100, msg: `Perte rapide (${kg7} kg/sem) — tu peux ajouter +100 kcal.` };
-  if (v >= 0.35) return { show: true, kg7, delta: 0, msg: `Rythme idéal (${kg7} kg/sem) — ne change rien.` };
+  if (v > 0.7) return { show: true, kg7, delta: +100, msg: `Perte rapide (${kg7s} kg/sem) — tu peux ajouter +100 kcal.` };
+  if (v >= 0.35) return { show: true, kg7, delta: 0, msg: `Rythme idéal (${kg7s} kg/sem) — ne change rien.` };
   // v < 0.35 : suggérer -100 seulement si 2 dimanches consécutifs sous 0.35
   const prevS = sundays.length >= 2 ? sundays[sundays.length - 2] : null;
   const vPrev = prevS ? evalSunday(prevS) : null;
-  if (vPrev != null && vPrev < 0.35) return { show: true, kg7, delta: -100, msg: `Perte lente 2 dim. de suite (${kg7} kg/sem) — envisage −100 kcal (plancher ${APPORT_FLOOR}).` };
-  return { show: true, kg7, delta: 0, msg: `Perte lente (${kg7} kg/sem) — on attend un 2ᵉ dimanche avant d'ajuster.` };
+  if (vPrev != null && vPrev < 0.35) return { show: true, kg7, delta: -100, msg: `Perte lente 2 dim. de suite (${kg7s} kg/sem) — envisage −100 kcal (plancher ${APPORT_FLOOR}).` };
+  return { show: true, kg7, delta: 0, msg: `Perte lente (${kg7s} kg/sem) — on attend un 2ᵉ dimanche avant d'ajuster.` };
 }

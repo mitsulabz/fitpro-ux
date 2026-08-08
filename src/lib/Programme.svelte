@@ -1,22 +1,11 @@
 <script lang="ts">
   import { appData, session, persistSession } from './store';
   import { nf } from './calc';
-  import { settingsFor, dsToMs } from './engine';
+  import { settingsFor, dsToMs, buildTimeline } from './engine';
   import { saveAppState, refreshToken } from './supabase';
   import { get } from 'svelte/store';
   import { onMount, onDestroy } from 'svelte';
 
-  const ACT_LEVELS = [
-    { key:'1.10', label:'Bloqué au lit',                    desc:'×1.10 · maladie, < 2 000 pas/j' },
-    { key:'1.15', label:'Geek 2500 pas',                    desc:'×1.15 · très sédentaire · ~2 500 pas/j' },
-    { key:'1.20', label:'Canap / bureau / voiture',         desc:'×1.20 · très sédentaire · 2–4k pas/j' },
-    { key:'1.30', label:'Courses, tâches ménagères légères',desc:'×1.30 · bouge un peu · 4–6k pas/j' },
-    { key:'1.40', label:"S'active quotidiennement",         desc:'×1.40 · beaucoup de déplacements · 6–9k pas/j' },
-    { key:'1.50', label:'Travail debout / bouge tout le temps', desc:'×1.50 · marche régulière · 9–12k pas/j' },
-    { key:'1.60', label:'Métier physique léger',            desc:'×1.60 · très actif · >12k pas/j' },
-    { key:'1.75', label:'Métier physique dur',              desc:'×1.75 · artisan, manutention, serveur actif' },
-    { key:'2.00', label:"Bouge autant qu'un sportif pro",   desc:'×2.00 · agriculture, chantier, sport pro' },
-  ];
 
   const MOIS: Record<string, number> = {
     janvier:0, février:1, fevrier:1, mars:2, avril:3, mai:4, juin:5,
@@ -106,7 +95,6 @@
   });
   const progCells = $derived((progCompare.length ? progCompare : PROGRAMS) as any[]);
 
-  const currentAct = $derived(profile?.act ?? '1.30');
   function effLog(data: any) {
     const log = data?.programme?.settingsLog;
     if (Array.isArray(log) && log.length) return log;
@@ -120,27 +108,31 @@
   }
   const baseLive = $derived(baseAt($appData as any, nf(profile.weight)));
   const minIntakeLive = $derived(1700);
+  const timeline = $derived.by(() => {
+    const data = $appData as any;
+    const A = (data?.programme?.activites ?? {}) as Record<string, number>;
+    const jByDs: any = {}; const dateList: any[] = [];
+    for (const j of progJours) { const jd = parseJour(j.jour); if (!jd) continue; jd.setHours(0,0,0,0); const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }); jByDs[ds] = j; dateList.push({ ds, t: jd.getTime() }); }
+    dateList.sort((a: any,b: any)=>a.t-b.t);
+    const info = (ds: string) => {
+      const dd = (days as any)[ds] ?? {}; const j = jByDs[ds]; const fds = dd.foods ?? [];
+      const sel = daySelections[ds] ?? selectionFor(data, j, ds);
+      const sportKcal = (sel && sel !== 'Libre') ? (A[sel] ?? 0) : 0;
+      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal, libre: sel === 'Libre', logged: fds.length > 0 };
+    };
+    return buildTimeline({ dateList, settingsLog: effLog(data), todayTime: todayDate.getTime(), dayFrac: 1, info });
+  });
   // Projection poids + MG au dernier jour : historique reel (passe loggé) + cibles du programme (futur)
   const endProj = $derived.by(() => {
-    const data = $appData as any;
     const w = nf(profile.weight), bf = nf(profile.bf);
     if (!w || !bf || progJours.length === 0) return null;
-    const base = baseAt(data, w);
-    const minIntake = 1700;
     let totalDef = 0;
-    progJours.forEach((j: any) => {
-      const jd = parseJour(j.jour); if (!jd) return;
-      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-      const act = daySelections[ds] ?? selectionFor(data, j, ds);
-      const sportK = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
-      const tdee = Math.round(base + sportK);
-      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
-      const dd = (data?.days ?? {})[ds] ?? {};
-      const eaten = (dd.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
-      const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
-      if (jd0 < todayDate && eaten > 0) totalDef += (tdee + (dd.extraKcal ?? 0)) - eaten; // reel passe
-      else totalDef += cible; // cible programme (aujourd'hui + futur + passe non loggé)
-    });
+    for (const r of (timeline as any).list) {
+      const dayExp = r.base + r.sportK;
+      const cible = r.libre ? 0 : Math.max(0, Math.round(Math.min(dayExp * 0.25, dayExp - 1700)));
+      if (!r.isFuture && !r.isToday && r.deficit != null) totalDef += r.deficit; // reel passe (moteur)
+      else totalDef += cible;
+    }
     const fatKg = Math.max(0, totalDef) / 7700;
     const fatInit = w * bf / 100;
     const endW = w - fatKg;
@@ -221,11 +213,6 @@
     let token = s.access_token;
     try { const fresh = await refreshToken(s.refresh_token); persistSession(fresh); token = fresh.access_token; } catch {}
     saveAppState(token, s.user.id, newData);
-  }
-
-  async function saveActLevel(key: string) {
-    const data = get(appData) as any;
-    await persist({ ...data, profile: { ...data.profile, act: key } });
   }
 
   async function flushActivities(entries: { name: string; kcal: number }[]) {
@@ -393,16 +380,6 @@
   </div>
   {/if}
 
-  <!-- Niveau d'activité de base -->
-  <div class="section-card">
-    <div class="section-title">Niveau d'activité de base</div>
-    <p class="section-hint">Ton métabolisme hors sport, utilisé pour les jours sans activité dans le programme.</p>
-    <select class="act-select" value={currentAct} onchange={(e) => saveActLevel((e.target as HTMLSelectElement).value)}>
-      {#each ACT_LEVELS as l}
-        <option value={l.key}>{l.label} — {l.desc}</option>
-      {/each}
-    </select>
-  </div>
 
   <!-- Activités du programme -->
   <div class="section-card">
@@ -446,11 +423,11 @@
       {@const past = isPast(j)}
       {@const sel = daySelections[ds] ?? ''}
       {@const sportK = (sel && sel !== 'Libre') ? (acts[sel] ?? 0) : 0}
-      {@const tdeeLive = Math.round(baseLive + sportK)}
-      {@const cibleLive = sel === 'Libre' ? 0 : Math.round(Math.min(tdeeLive * 0.25, tdeeLive - minIntakeLive))}
-      {@const intakeLive = sel === 'Libre' ? tdeeLive : tdeeLive - cibleLive}
-      {@const exp = tdeeLive + ((days as any)[ds]?.extraKcal ?? 0)}
-      {@const realDef = exp - eaten}
+      {@const rec = (timeline.byKey as any)[ds]}
+      {@const dep = rec ? rec.exp : Math.round(baseLive + sportK)}
+      {@const cibleLive = sel === 'Libre' ? 0 : Math.max(0, Math.round(Math.min(dep * 0.25, dep - minIntakeLive)))}
+      {@const intakeLive = sel === 'Libre' ? dep : dep - cibleLive}
+      {@const realDef = rec && rec.deficit != null ? rec.deficit : (dep - eaten)}
       <div class="jour-card" class:today class:past>
         <div class="jour-num">{i + 1}</div>
         <div class="jour-info">
@@ -470,7 +447,7 @@
         <div class="jour-right">
           {#if today}
             <div class="jour-tag">aujourd'hui</div>
-            <div class="jour-metric"><span class="jm-lbl">dépense</span> {tdeeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">dépense</span> {dep.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {:else if past && eaten > 0}
             <div class="jour-metric">
               <span class="jm-lbl">mangé</span>
@@ -479,7 +456,7 @@
           {:else if past}
             <div class="jour-metric"><span class="jm-lbl">mangé</span> <span class="muted">—</span></div>
           {:else}
-            <div class="jour-metric"><span class="jm-lbl">dépense</span> {tdeeLive.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
+            <div class="jour-metric"><span class="jm-lbl">dépense</span> {dep.toLocaleString('fr')}<span class="jm-u"> kcal</span></div>
           {/if}
           {#if past && eaten > 0}
             <div class="jour-def caption" style="color:{realDef >= 0 ? 'var(--c-green)' : 'var(--c-red)'}">
