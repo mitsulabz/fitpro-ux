@@ -1,6 +1,7 @@
 <script lang="ts">
   import { appData, session, persistSession } from './store';
-  import { nf, calcBMR, calcTDEE } from './calc';
+  import { nf } from './calc';
+  import { settingsFor, dsToMs } from './engine';
   import { saveAppState, refreshToken } from './supabase';
   import { get } from 'svelte/store';
   import { onMount, onDestroy } from 'svelte';
@@ -77,16 +78,14 @@
   function summarizeSel(data: any, selMap: Record<string, string>) {
     const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
     const jours: any[] = data.programme?.jours ?? [];
-    const bmr = calcBMR(data.profile ?? {});
-    const actKey = data.profile?.act ?? '1.40';
-    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const base = baseAt(data, nf(data.profile?.weight));
+    const minIntake = 1700;
     let total = 0;
     jours.forEach((j: any) => {
       const ds = dsOf(j);
       const value = selMap[ds] ?? selectionFor(data, j, ds);
       if (value === 'Libre') return;
-      const tdee = Math.round(calcTDEE(bmr, actKey, value === '' ? 0 : (curActs[value] ?? 0)));
+      const tdee = Math.round(base + (value === '' ? 0 : (curActs[value] ?? 0)));
       total += Math.round(Math.min(tdee * 0.25, tdee - minIntake));
     });
     return { total: Math.round(total), kg: +(total / 7700).toFixed(1) };
@@ -108,24 +107,33 @@
   const progCells = $derived((progCompare.length ? progCompare : PROGRAMS) as any[]);
 
   const currentAct = $derived(profile?.act ?? '1.30');
-  const bmrLive = $derived(calcBMR(profile));
-  const minIntakeLive = $derived(Math.max(Math.round(bmrLive), profile.sex === 'f' ? 1200 : 1500));
+  function effLog(data: any) {
+    const log = data?.programme?.settingsLog;
+    if (Array.isArray(log) && log.length) return log;
+    let from = '16/06/2026', minT = Infinity;
+    for (const k of Object.keys(data?.days ?? {})) { const t = dsToMs(k); if (!isNaN(t) && t < minT) { minT = t; from = k; } }
+    return [{ from, baseRef: 2020, poidsRef: 97.92, adaptCoef: 0.12 }];
+  }
+  function baseAt(data: any, weight: number) {
+    const st: any = settingsFor(effLog(data), todayDate.getTime());
+    return st.baseRef - 12 * (st.poidsRef - (weight || st.poidsRef));
+  }
+  const baseLive = $derived(baseAt($appData as any, nf(profile.weight)));
+  const minIntakeLive = $derived(1700);
   // Projection poids + MG au dernier jour : historique reel (passe loggé) + cibles du programme (futur)
   const endProj = $derived.by(() => {
     const data = $appData as any;
     const w = nf(profile.weight), bf = nf(profile.bf);
     if (!w || !bf || progJours.length === 0) return null;
-    const bmr = calcBMR(profile);
-    const actF = nf(profile.act) || 1.4;
-    const sexFloor = profile.sex === 'f' ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const base = baseAt(data, w);
+    const minIntake = 1700;
     let totalDef = 0;
     progJours.forEach((j: any) => {
       const jd = parseJour(j.jour); if (!jd) return;
       const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
       const act = daySelections[ds] ?? selectionFor(data, j, ds);
       const sportK = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
-      const tdee = Math.round(bmr * actF + sportK);
+      const tdee = Math.round(base + sportK);
       const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       const dd = (data?.days ?? {})[ds] ?? {};
       const eaten = (dd.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
@@ -281,10 +289,8 @@
   function computeProgram(data: any, selMap: Record<string, string>) {
     const curActs = (data.programme?.activites ?? {}) as Record<string, number>;
     const jours: any[] = data.programme?.jours ?? [];
-    const bmr = calcBMR(data.profile ?? {});
-    const actKey = data.profile?.act ?? '1.40';
-    const sexFloor = (data.profile?.sex === 'f') ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const base = baseAt(data, nf(data.profile?.weight));
+    const minIntake = 1700;
     const newDays = { ...(data.days ?? {}) };
     const newJours = jours.map((j: any) => {
       const ds = dsOf(j);
@@ -292,11 +298,11 @@
       const progAct = value === '' ? false : { name: value, kcal: value === 'Libre' ? 0 : (curActs[value] ?? 0) };
       newDays[ds] = { ...(newDays[ds] ?? {}), progActivity: progAct };
       if (value === 'Libre') {
-        const brulees = Math.round(calcTDEE(bmr, actKey, 0));
+        const brulees = Math.round(base);
         return { ...j, activity: 'Libre', type: 'Libre — journée neutre', deficit: 0, calories: brulees, calories_brulees: brulees };
       }
       const sportKcal = value === '' ? 0 : (curActs[value] ?? 0);
-      const tdee = Math.round(calcTDEE(bmr, actKey, sportKcal));
+      const tdee = Math.round(base + sportKcal);
       const deficit = Math.round(Math.min(tdee * 0.25, tdee - minIntake));
       const calories = tdee - deficit;
       return { ...j, activity: value, type: value || j.type, calories_brulees: tdee, deficit, calories };
@@ -440,7 +446,7 @@
       {@const past = isPast(j)}
       {@const sel = daySelections[ds] ?? ''}
       {@const sportK = (sel && sel !== 'Libre') ? (acts[sel] ?? 0) : 0}
-      {@const tdeeLive = Math.round(bmrLive * nf(profile.act) + sportK)}
+      {@const tdeeLive = Math.round(baseLive + sportK)}
       {@const cibleLive = sel === 'Libre' ? 0 : Math.round(Math.min(tdeeLive * 0.25, tdeeLive - minIntakeLive))}
       {@const intakeLive = sel === 'Libre' ? tdeeLive : tdeeLive - cibleLive}
       {@const exp = tdeeLive + ((days as any)[ds]?.extraKcal ?? 0)}

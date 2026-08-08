@@ -30,7 +30,8 @@ export function initGraphViz(root, seed) {
 <h2>Historique réel</h2>
 <div class="h2sub">Tes pesées et masse grasse saisies dans Suivi · 16 juin → 31 juillet 2026</div>
 <div class="cw" id="histCw"></div>
-<div class="legend"><span><span class="sw" style="border-color:var(--s1)"></span>poids</span><span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span></div>
+<div class="legend"><span><span class="sw" style="border-color:var(--s1)"></span>poids</span><span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span><span><span class="sw" style="border-color:var(--s3)"></span>poids ajusté (glycogène)</span></div>
+<div id="waterBanner"></div>
 </section>
 <h2 style="margin:30px 0 2px">Prévisionnel</h2>
 <p class="sub">À partir de ta dernière pesée : <strong>${W0.toFixed(2).replace('.',',')} kg · ${F0.toFixed(1).replace('.',',')} kg de masse grasse (${(F0/W0*100).toFixed(1).replace('.',',')} %)</strong>. Trois périodes indépendantes — chacune a ses activités et son apport, et repart de l'état atteint à la fin de la précédente.</p>
@@ -220,7 +221,7 @@ export function initGraphViz(root, seed) {
     const yy=[];
     SER.forEach((se,pi)=>{
       const key=se[1],top=PT+pi*(PH+GAP);
-      const vals=C.map(p=>p[key]).filter(v=>v!=null);
+      const vals=C.map(p=>p[key]).concat(key==='w'?C.map(p=>p.adj):[]).filter(v=>v!=null);
       if(!vals.length){yy.push(()=>top+PH); return;}
       const lo0=Math.min(...vals),hi0=Math.max(...vals);
       const m=(hi0-lo0)*0.25||0.5, lo=lo0-m, hi=hi0+m;
@@ -234,6 +235,7 @@ export function initGraphViz(root, seed) {
       ticks.forEach(t=>S.push(`<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${top+PH}" class="grv"/>`));
       const pline=C.filter(p=>p[key]!=null).map(p=>`${X(p.t).toFixed(1)},${Y(p[key]).toFixed(1)}`).join(' ');
       S.push(`<polyline points="${pline}" fill="none" stroke="${se[2]}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`);
+      if(key==='w'){ const al=C.filter(p=>p.adj!=null).map(p=>`${X(p.t).toFixed(1)},${Y(p.adj).toFixed(1)}`).join(' '); if(al) S.push(`<polyline points="${al}" fill="none" stroke="var(--s3)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>`); }
       C.forEach(p=>{ if(p[key]!=null) S.push(`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p[key]).toFixed(1)}" r="2.6" fill="${se[2]}"/>`);});
       const pres=C.filter(p=>p[key]!=null),last=pres[pres.length-1],first=pres[0];
       const fm=v=>v.toFixed(1).replace('.',',');
@@ -271,6 +273,8 @@ export function initGraphViz(root, seed) {
     const HP = histPanel('H', seed.history);
     document.getElementById('histCw').innerHTML = HP.svg + `<div class="tip" id="tipH"></div>`;
     histHover('H', seed.history, HP);
+    const wb = document.getElementById('waterBanner');
+    if (wb) wb.innerHTML = seed.waterBanner ? `<div class="water-banner">💧 ${seed.waterBanner}</div>` : '';
   } else {
     const hs = document.getElementById('histSec'); if (hs) hs.style.display = 'none';
   }

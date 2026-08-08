@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t, appData, session, persistSession } from "./store";
   import { nf, calcBMR } from './calc';
+  import { buildTimeline, sundayRule, APPORT_FLOOR } from './engine';
   import { saveAppState, refreshToken } from "./supabase";
   import { get } from "svelte/store";
   import FoodModal from "./FoodModal.svelte";
@@ -57,6 +58,41 @@
   const today = $derived(days[todayKey] ?? {});
   const foods = $derived(today?.foods ?? []);
 
+  // ── v11 : moteur de dépense mesurée (base datée + dynamique + adaptation) ──
+  const settingsLog = $derived.by(() => {
+    const log = ($appData as any)?.programme?.settingsLog;
+    if (Array.isArray(log) && log.length) return log;
+    const j1 = progJours.length ? parseJour(progJours[0].jour) : null;
+    const from = j1 ? j1.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '16/06/2026';
+    return [{ from, baseRef: 2020, poidsRef: 97.92, adaptCoef: 0.12 }];
+  });
+  const timeline = $derived.by(() => {
+    const acts = (prog?.activites ?? {}) as Record<string, number>;
+    const jByDs: any = {}; const dateList: any[] = [];
+    for (const j of progJours) {
+      const jd = parseJour(j.jour); if (!jd) continue; jd.setHours(0,0,0,0);
+      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+      jByDs[ds] = j; dateList.push({ ds, t: jd.getTime() });
+    }
+    dateList.sort((a: any,b: any)=>a.t-b.t);
+    const info = (ds: string) => {
+      const dd = (days as any)[ds] ?? {}; const j = jByDs[ds];
+      const fds = dd.foods ?? [];
+      const act = j ? actOf(j, ds) : '';
+      const sportKcal = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
+      return {
+        weight: nf(dd.weight), bf: nf(dd.bf),
+        eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0),
+        gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0),
+        prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0),
+        extraKcal: dd.extraKcal ?? 0, sportKcal, libre: act === 'Libre', logged: fds.length>0,
+      };
+    };
+    return buildTimeline({ dateList, settingsLog, todayTime: todayDate.getTime(), dayFrac, info });
+  });
+  const todayRec = $derived((timeline.byKey as any)[todayKey] ?? null);
+  const sundaySug = $derived(sundayRule(timeline, todayDate.getTime()));
+
   const macros = $derived(foods.reduce(
     (acc: any, f: any) => ({ k: acc.k+(f.k||0), p: acc.p+(f.p||0), g: acc.g+(f.g||0), l: acc.l+(f.l||0) }),
     { k:0, p:0, g:0, l:0 }
@@ -70,14 +106,12 @@
   }));
 
   const progDay = $derived(progIdx >= 0 ? progJours[progIdx] : null);
-  const tBrulees = $derived((progDay?.calories_brulees ?? 0) + (today?.extraKcal ?? 0));
-  const tIntake = $derived(progDay?.calories ?? 0);
-  const tdeeToday = $derived.by(() => {
-    const bmr = bmrOf(profile); const actF = nfp(profile.act) || 1.4;
-    const act = progDay ? actOf(progDay, todayKey) : '';
-    const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
-    return Math.round(bmr * actF + sportK + (today?.extraKcal ?? 0));
-  });
+  const tdeeToday = $derived(todayRec ? Math.round(todayRec.base + todayRec.sportK) : 0);
+  const tBrulees = $derived(tdeeToday);
+  const tIntake = $derived(todayRec
+    ? (todayRec.libre ? Math.round(todayRec.base + todayRec.sportK)
+       : Math.round(Math.max(APPORT_FLOOR, (todayRec.base + todayRec.sportK) * 0.75)))
+    : 1850);
   const deficit = $derived(Math.round(macros.k) - tBrulees);
   const mCible = $derived.by(() => {
     const w = parseFloat(String(($appData as any)?.profile?.weight ?? '').replace(',', '.')) || 100;
@@ -106,50 +140,28 @@
     return /libre/i.test(t) ? 'Libre' : t;
   }
   const progStats = $derived.by(() => {
-    const bmr = bmrOf(profile);
-    const actF = nfp(profile.act) || 1.4;
     const w = nfp(profile.weight) || 100;
-    const pTargetDay = 1.6 * w; // g de proteines/jour pour preserver le muscle
-    const sexFloor = profile.sex === 'f' ? 1200 : 1500;
-    const minIntake = Math.max(Math.round(bmr), sexFloor);
+    const pTargetDay = 1.6 * w;
     let totalCible = 0, realBrule = 0, expectedSoFar = 0;
     let fatKcal = 0, leanKcalDef = 0, defKcalPos = 0, protEaten = 0, protTarget = 0, protShortfall = 0;
-    progJours.forEach((j: any) => {
-      const jd = parseJour(j.jour); if (!jd) return;
-      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-      const act = actOf(j, ds);
-      const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
-      const tdee = Math.round(bmr * actF + sportK);
-      const cible = act === 'Libre' ? 0 : Math.round(Math.min(tdee * 0.25, tdee - minIntake));
+    for (const r of (timeline as any).list) {
+      const dayExp = r.base + r.sportK; // dépense pleine du jour
+      const cible = r.libre ? 0 : Math.max(0, Math.round(Math.min(dayExp * 0.25, dayExp - APPORT_FLOOR)));
       totalCible += cible;
-      const dd = (days as any)[ds] ?? {};
-      const fds = dd.foods ?? [];
-      const eaten = fds.reduce((s: number, f: any) => s + (f.k||0), 0);
-      const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
-      const isToday = jd0.getTime() === todayDate.getTime();
-      const isPastLogged = jd0 < todayDate && eaten > 0;
-      if (!isToday && !isPastLogged) return;
-      const frac = isToday ? dayFrac : 1; // jour en cours : prorata horaire
-      const def = (Math.round(tdee * frac) + (dd.extraKcal ?? 0)) - eaten; // signe : + deficit, - surplus
-      realBrule += def;
-      expectedSoFar += cible * frac;
+      if (r.deficit == null) continue;
+      realBrule += r.deficit;
+      expectedSoFar += r.isToday ? cible * dayFrac : cible;
+      const def = r.deficit;
       if (def > 0) {
-        // jour en deficit : perte de gras + masse maigre selon les proteines
-        const pDay = fds.reduce((s: number, f: any) => s + (f.p||0), 0);
-        const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, pDay / pTargetDay)) : 1;
-        const fatFrac = 0.70 + 0.20 * ratio; // 0.70 (0 proteines) -> 0.90 (cible atteinte)
-        fatKcal += def * fatFrac;
-        leanKcalDef += def * (1 - fatFrac);
-        defKcalPos += def;
-        protEaten += pDay;
-        protTarget += pTargetDay;
-        protShortfall += Math.max(0, pTargetDay - pDay);
+        const ratio = pTargetDay > 0 ? Math.max(0, Math.min(1, r.prot / pTargetDay)) : 1;
+        const fatFrac = 0.70 + 0.20 * ratio;
+        fatKcal += def * fatFrac; leanKcalDef += def * (1 - fatFrac); defKcalPos += def;
+        protEaten += r.prot; protTarget += pTargetDay; protShortfall += Math.max(0, pTargetDay - r.prot);
       } else {
-        // jour en surplus : re-stocke du gras (~85 %, le reste = thermogenese) ; le muscle n'est PAS regagne sans muscu
-        fatKcal += def * 0.85; // def < 0 -> retire du gras net
+        fatKcal += def * 0.85;
       }
-    });
-    fatKcal = Math.max(0, fatKcal); // gras NET (deficit - surplus), coherent avec realBrule
+    }
+    fatKcal = Math.max(0, fatKcal);
     const fatShare = (fatKcal + leanKcalDef) > 0 ? fatKcal / (fatKcal + leanKcalDef) : 0.9;
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
     return { totalCible, realBrule, expectedSoFar, fatKcal, leanKcalDef, fatShare, protPct, defKcalPos, protShortfall };
@@ -282,11 +294,10 @@
       const sg = (foods as any[]).reduce((s: number, f: any) => s + (f.g||0), 0);
       const sl = (foods as any[]).reduce((s: number, f: any) => s + (f.l||0), 0);
       // deficit reel du jour = depense - mange
-      const act = jd ? actOf(jd, key) : '';
-      const sportK = (act && act !== 'Libre') ? (activites[act] ?? 0) : 0;
-      const tdee = Math.round(bmrOf(profile) * (nfp(profile.act) || 1.4) + sportK);
-      const expend = tdee + extraKcal;
-      const deficit = hasFood ? Math.round(expend - total) : null; // null si rien loggé
+      const rec = (timeline.byKey as any)[key];
+      const expend = rec ? rec.exp : 0;
+      const adaptation = rec ? rec.adaptation : 0;
+      const deficit = hasFood ? (rec ? rec.deficit : null) : null; // null si rien loggé
       const neutre = deficit !== null && Math.abs(deficit) <= 50; // neutre = mange ~ depense
       // detail des grammes perdus/pris ce jour (meme modele que les cellules kg perdus)
       // signe : negatif = perdu, positif = pris
@@ -309,7 +320,7 @@
           gMuscle = 0;
         }
       }
-      result.push({ key, label, jNum, foods, total, cible, expend, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gMuscle, gFat, gWater });
+      result.push({ key, label, jNum, foods, total, cible, expend, adaptation, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gMuscle, gFat, gWater });
     }
     return result;
   });
@@ -318,7 +329,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V10.9";
+  const BUILD = "V11.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -569,6 +580,13 @@
       <div class="progress-fill" style="width:{progressPct}%"></div>
     </div>
     <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
+  </div>
+  {/if}
+
+  {#if sundaySug?.show && sundaySug.delta !== 0}
+  <div class="card sunday-card">
+    <span class="sunday-ico">📅</span>
+    <span class="sunday-msg">{sundaySug.msg}</span>
   </div>
   {/if}
 
@@ -925,6 +943,7 @@
         />
         <span class="sport-extra-unit">%</span>
       </div>
+      {#if day.adaptation}<div class="caption" style="padding:8px 0 0">🔥 Thermogénèse adaptative comptée ce jour-là : −{day.adaptation} kcal</div>{/if}
     </div>
   </details>
   {/each}
@@ -1074,4 +1093,7 @@
 .supp-chip.on { background:var(--c-green); border-color:var(--c-green); color:#fff; }
 .supp-box { width:14px; height:14px; border-radius:4px; border:1px solid currentColor; display:inline-flex; align-items:center; justify-content:center; font-size:10px; line-height:1; flex-shrink:0; }
 .supp-chip.on .supp-box { background:#fff; color:var(--c-green); border-color:#fff; }
+.sunday-card { display:flex; align-items:flex-start; gap:9px; padding:12px 14px; margin-bottom:10px; background:var(--c-surface); border:1px solid var(--c-accent); border-radius:var(--r-md); }
+.sunday-ico { font-size:16px; flex-shrink:0; }
+.sunday-msg { font-size:13px; color:var(--c-text); line-height:1.4; }
 </style>

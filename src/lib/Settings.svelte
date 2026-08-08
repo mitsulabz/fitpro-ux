@@ -1,7 +1,7 @@
 <script lang="ts">
   import { theme, t, session, appData, persistSession } from "./store";
   import { saveAppState } from "./supabase";
-  import { calcBMR } from "./calc";
+  import { buildTimeline, recalibrate, settingsFor, dsToMs, nf, ADAPT_DEFAULT } from "./engine";
 
   function toggleTheme() { theme.update(v => v === "dark" ? "light" : "dark"); }
 
@@ -60,6 +60,60 @@
     catch { profileStatus = 'Erreur de sauvegarde'; }
     setTimeout(() => profileStatus = '', 2500);
   }
+
+  // ── v11 : base mesurée datée + recalibrage ──
+  const _now = new Date(); _now.setHours(0,0,0,0);
+  const todayMs = _now.getTime();
+  const todayDs = _now.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+  function effectiveLog(data: any) {
+    const log = data?.programme?.settingsLog;
+    if (Array.isArray(log) && log.length) return log;
+    let from = todayDs, minT = Infinity;
+    for (const k of Object.keys(data?.days ?? {})) { const t = dsToMs(k); if (!isNaN(t) && t < minT) { minT = t; from = k; } }
+    return [{ from, baseRef: 2020, poidsRef: 97.92, adaptCoef: ADAPT_DEFAULT }];
+  }
+  let baseForm = $state({ baseRef: '', poidsRef: '', adaptCoef: '' });
+  let baseLoaded = false;
+  let baseStatus = $state('');
+  $effect(() => {
+    const data = $appData as any;
+    if (data && !baseLoaded) {
+      const cur: any = settingsFor(effectiveLog(data), todayMs);
+      baseForm = { baseRef: String(cur.baseRef), poidsRef: String(cur.poidsRef), adaptCoef: String(cur.adaptCoef ?? ADAPT_DEFAULT) };
+      baseLoaded = true;
+    }
+  });
+  const recalib = $derived.by(() => {
+    const data = $appData as any; if (!data) return null;
+    const days = data.days ?? {}; const acts = data.programme?.activites ?? {};
+    const dateList = Object.keys(days).map((ds: string) => ({ ds, t: dsToMs(ds) })).filter((x: any) => !isNaN(x.t)).sort((a: any, b: any) => a.t - b.t);
+    const info = (ds: string) => {
+      const dd: any = days[ds] ?? {}; const fds = dd.foods ?? [];
+      const pa = dd.progActivity; const actName = pa === false ? '' : (pa?.name ?? '');
+      const sportKcal = (actName && actName !== 'Libre') ? (acts[actName] ?? 0) : 0;
+      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal, libre: actName === 'Libre', logged: fds.length > 0 };
+    };
+    const tl = buildTimeline({ dateList, settingsLog: effectiveLog(data), todayTime: todayMs, dayFrac: 1, info });
+    return recalibrate(tl);
+  });
+  async function saveBase(baseRef: any, poidsRef: any, adaptCoef: any) {
+    const s = $session; const data = $appData as any;
+    if (!s || !data) return;
+    baseStatus = 'Sauvegarde…';
+    const prog = data.programme ?? {};
+    let log = Array.isArray(prog.settingsLog) ? [...prog.settingsLog] : [];
+    if (!log.length) log = effectiveLog(data).slice(); // fige le passé avec la base initiale
+    log = log.filter((e: any) => e.from !== todayDs);
+    log.push({ from: todayDs, baseRef: Math.round(nf(baseRef)), poidsRef: +nf(poidsRef).toFixed(2), adaptCoef: Math.max(0, Math.min(0.15, nf(adaptCoef) || ADAPT_DEFAULT)) });
+    log.sort((a: any, b: any) => dsToMs(a.from) - dsToMs(b.from));
+    const newData = { ...data, programme: { ...prog, settingsLog: log } };
+    appData.set(newData);
+    try { await saveAppState(s.access_token, s.user.id, newData); baseStatus = '\u2713 Base enregistr\u00e9e (d\u00e8s aujourd\u2019hui)'; }
+    catch { baseStatus = 'Erreur de sauvegarde'; }
+    setTimeout(() => baseStatus = '', 2600);
+  }
+  function saveBaseForm() { saveBase(baseForm.baseRef, baseForm.poidsRef, baseForm.adaptCoef); }
+  function applyRecalib() { if (recalib && (recalib as any).ok) { const r: any = recalib; baseForm = { ...baseForm, baseRef: String(r.baseRef), poidsRef: String(r.poidsRef) }; saveBase(r.baseRef, r.poidsRef, baseForm.adaptCoef); } }
 
   function triggerImport() { fileInput.click(); }
 
@@ -132,10 +186,24 @@
     <label class="pf-row"><span>Taille (cm)</span><input type="number" bind:value={pf.height} /></label>
     <label class="pf-row"><span>Âge</span><input type="number" bind:value={pf.age} /></label>
     <label class="pf-row"><span>Sexe</span><select bind:value={pf.sex}><option value="h">Homme</option><option value="f">Femme</option></select></label>
-    <label class="pf-row"><span>BMR réel (kcal/j)</span><input type="number" inputmode="numeric" step="10" placeholder={String(calcBMR({ weight: pf.weight, bf: pf.bf, height: pf.height, age: pf.age, sex: pf.sex }))} bind:value={pf.bmrManual} /></label>
-    <p class="pf-hint">Métabolisme de base. Laisse vide pour l'estimation automatique ({Math.round(calcBMR({ weight: pf.weight, bf: pf.bf, height: pf.height, age: pf.age, sex: pf.sex }))} kcal). Une valeur saisie ici remplace le calcul dans TOUTES les projections.</p>
     <button class="card save-btn" onclick={saveProfile}>Enregistrer le profil</button>
     {#if profileStatus}<div class="import-status" class:success={profileStatus.startsWith('✓')}>{profileStatus}</div>{/if}
+  </div>
+
+  <div class="section-title">Dépense mesurée (base)</div>
+  <div class="section profile-form">
+    <label class="pf-row"><span>Base mesurée (kcal/j)</span><input type="number" inputmode="numeric" step="10" bind:value={baseForm.baseRef} /></label>
+    <label class="pf-row"><span>Poids de réf. (kg)</span><input type="number" inputmode="decimal" step="0.1" bind:value={baseForm.poidsRef} /></label>
+    <label class="pf-row"><span>Adaptation (0–0,15)</span><input type="number" inputmode="decimal" step="0.01" bind:value={baseForm.adaptCoef} /></label>
+    <p class="pf-hint">Dépense hors sport à ce poids de référence (mesurée par bilan énergétique). Elle varie ensuite de −12 kcal par kg perdu. Enregistrer applique la valeur À PARTIR D'AUJOURD'HUI — le passé n'est jamais recalculé.</p>
+    {#if recalib && recalib.ok}
+      <div class="recalib-banner">📏 Base mesurée sur {recalib.days} j : <b>{recalib.baseRef}</b> kcal · poids réf {String(recalib.poidsRef).replace('.', ',')} kg · perte {String(recalib.perteMM7).replace('.', ',')} kg
+        <button class="recalib-btn" onclick={applyRecalib}>Appliquer</button></div>
+    {:else if recalib && !recalib.ok}
+      <p class="pf-hint">Recalibrage indispo : {recalib.reason}.</p>
+    {/if}
+    <button class="card save-btn" onclick={saveBaseForm}>Enregistrer la base (dès aujourd'hui)</button>
+    {#if baseStatus}<div class="import-status" class:success={baseStatus.startsWith('✓')}>{baseStatus}</div>{/if}
   </div>
 
   <div class="section-title">Apparence</div>
@@ -177,7 +245,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V10.9</div>
+  <div class="version caption">FitProX · V11.0</div>
 </div>
 
 <style>
@@ -198,6 +266,8 @@
 .pf-row { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--c-surface); border:0.5px solid var(--c-border); border-radius:var(--r-md); padding:10px 14px; }
 .pf-row span { font-size:14px; color:var(--c-text); }
 .pf-hint { font-size:11px; color:var(--c-text3); margin:2px 2px 0; line-height:1.4; }
+.recalib-banner { font-size:12.5px; color:var(--c-text); background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--r-md); padding:9px 11px; line-height:1.5; }
+.recalib-btn { margin-left:6px; border:none; background:var(--c-accent); color:var(--c-accent-fg); font-size:12px; font-weight:600; padding:4px 10px; border-radius:7px; cursor:pointer; font-family:var(--font); }
 .pf-row input, .pf-row select { width:110px; padding:6px 8px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-bg); color:var(--c-text); font-size:14px; text-align:right; font-family:var(--font); }
 .pf-row input:focus, .pf-row select:focus { outline:none; border-color:var(--c-accent); }
 .save-btn { text-align:center; justify-content:center; padding:12px; background:var(--c-accent); color:var(--c-accent-fg); border:none; font-size:14px; font-weight:600; cursor:pointer; font-family:var(--font); border-radius:var(--r-md); }

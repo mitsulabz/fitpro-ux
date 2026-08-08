@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { appData } from './store';
   import { get } from 'svelte/store';
-  import { calcBMR, nf } from './calc';
+  import { nf } from './calc';
+  import { buildTimeline, settingsFor, dsToMs, ADAPT_DEFAULT } from './engine';
   import { initGraphViz } from './graphViz';
 
   let root: HTMLDivElement;
@@ -11,27 +12,44 @@
     const data = (get(appData) as any) ?? {};
     const p = data.profile ?? {};
     const days = data.days ?? {};
+    const acts = data.programme?.activites ?? {};
     const J1 = Date.UTC(2026, 5, 16);      // 16 juin 2026
     const JULY31 = Date.UTC(2026, 6, 31);  // 31 juillet 2026
-    // pesées réelles saisies dans Suivi
-    const pts: { t: number; w: number; f: number | null }[] = [];
+    const nowMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+    const log = (Array.isArray(data.programme?.settingsLog) && data.programme.settingsLog.length)
+      ? data.programme.settingsLog : [{ from: '16/06/2026', baseRef: 2020, poidsRef: 97.92, adaptCoef: ADAPT_DEFAULT }];
+    // timeline (glycogène) sur les jours loggés
+    const dl = Object.keys(days).map((ds) => ({ ds, t: dsToMs(ds) })).filter((x: any) => !isNaN(x.t)).sort((a: any, b: any) => a.t - b.t);
+    const info = (ds: string) => {
+      const dd: any = days[ds] ?? {}; const fds = dd.foods ?? [];
+      const pa = dd.progActivity; const an = pa === false ? '' : (pa?.name ?? '');
+      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal: (an && an !== 'Libre') ? (acts[an] ?? 0) : 0, libre: an === 'Libre', logged: fds.length > 0 };
+    };
+    const tl: any = buildTimeline({ dateList: dl, settingsLog: log, todayTime: nowMs, dayFrac: 1, info });
+    // pesées réelles + poids ajusté (glycogène)
+    const pts: { t: number; w: number; f: number | null; adj: number | null }[] = [];
     for (const k of Object.keys(days)) {
       const d = days[k];
       const w = nf(d?.weight); if (!w) continue;
       const parts = k.split('/').map(Number); if (parts.length !== 3) continue;
       const t = Date.UTC(parts[2], parts[1] - 1, parts[0]);
       const bfv = nf(d?.bf);
-      pts.push({ t, w, f: bfv > 0 ? +(w * bfv / 100).toFixed(1) : null });
+      const rec = tl.byKey[k];
+      pts.push({ t, w, f: bfv > 0 ? +(w * bfv / 100).toFixed(1) : null, adj: rec && rec.poidsAjuste != null ? rec.poidsAjuste : null });
     }
     pts.sort((a, b) => a.t - b.t);
     const history = pts.filter((pt) => pt.t >= J1 && pt.t <= JULY31);
-    // prévisionnel : part de la dernière pesée réelle (sinon profil, sinon défaut)
     const last = pts[pts.length - 1];
     const W0 = last?.w || nf(p.weight) || 97.95;
     const lastBf = last && last.f ? (last.f / last.w * 100) : (nf(p.bf) || 30.5);
     const F0 = +(W0 * lastBf / 100).toFixed(1);
-    const BASE0 = Math.round((calcBMR(p) || 1650) * (nf(p.act) || 1.2)) || 2020;
-    initGraphViz(root, { W0, F0, BASE0, history });
+    const st: any = settingsFor(log, nowMs);
+    const BASE0 = Math.round(st.baseRef - 12 * (st.poidsRef - W0)) || 2020;
+    // bannière eau (dernier jour loggé)
+    const lastRec = tl.list[tl.list.length - 1];
+    const eau = lastRec ? lastRec.eauGlyco : 0;
+    const waterBanner = Math.abs(eau) > 300 ? `~${Math.abs(eau)} g d'eau (glycogène) ${eau > 0 ? 'masquent' : 'exagèrent'} la tendance récente.` : '';
+    initGraphViz(root, { W0, F0, BASE0, history, waterBanner });
   });
 </script>
 
@@ -95,6 +113,7 @@
   .graph-root .cmptx { font:9.5px ui-sans-serif,sans-serif; fill:var(--text-muted); }
   .graph-root .obj { stroke:var(--s2); stroke-width:1.5; opacity:.75; }
   .graph-root .crs { stroke:var(--text-muted); stroke-width:1; stroke-dasharray:3 3; }
+  .graph-root .water-banner { margin-top:8px; font-size:12.5px; color:var(--text-primary); background:var(--surface-2); border:1px solid var(--s1); border-radius:9px; padding:8px 11px; }
   .graph-root .note { font-size:12.5px; color:var(--text-secondary); border-left:3px solid var(--line); padding-left:12px; margin:16px 0 4px; }
   .graph-root details { margin-top:16px; }
   .graph-root summary { cursor:pointer; font-size:13px; color:var(--text-secondary); }
