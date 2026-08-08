@@ -184,15 +184,11 @@
     meas.sort((a, b) => a.t - b.t);
     if (meas.length < 1) return null;
     const start = meas[0], now = meas[meas.length - 1];
-    const fatLostKg = Math.max(0, start.fat - now.fat);
-    const leanLostKg = Math.max(0, (start.w - now.w) - (start.fat - now.fat));
-    const ratio = Math.max(0, Math.min(1, progStats.protPct));
-    let muscleKg = leanLostKg * (0.20 + 0.40 * (1 - ratio));
-    let waterKg = leanLostKg - muscleKg;
-    if (waterKg > 1.75) { muscleKg += waterKg - 1.75; waterKg = 1.75; }
+    const fatLostKg = start.fat - now.fat;          // signé
+    const weightLostKg = start.w - now.w;           // signé
+    const leanChangeKg = weightLostKg - fatLostKg;  // < 0 = muscle GAGNÉ (recomposition)
     return {
-      g: Math.round(fatLostKg * 1000), leanG: Math.round(leanLostKg * 1000),
-      realMuscleG: Math.round(muscleKg * 1000), waterG: Math.round(waterKg * 1000),
+      fatLostKg, weightLostKg, leanChangeKg,
       bf: +start.bf.toFixed(1), bfNow: +now.bf.toFixed(1),
       startW: start.w, nowW: now.w, startFat: start.fat, nowFat: now.fat,
     };
@@ -331,7 +327,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V11.4";
+  const BUILD = "V11.5";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -612,15 +608,14 @@
   {/if}
 
   {#if fatLost}
-  {@const totalLostG = fatLost.g + fatLost.leanG}
   <div class="card lost-card">
     <div class="lost-grid">
       <div class="lost-item">
-        <div class="lost-val">−{(totalLostG / 1000).toFixed(2).replace('.', ',')} kg</div>
+        <div class="lost-val">−{Math.max(0, fatLost.weightLostKg).toFixed(2).replace('.', ',')} kg</div>
         <div class="lost-lbl">Poids perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.g / 1000).toFixed(2).replace('.', ',')} kg</div>
+        <div class="lost-val" style="color:var(--c-green)">−{Math.max(0, fatLost.fatLostKg).toFixed(2).replace('.', ',')} kg</div>
         <div class="lost-lbl">Gras perdu</div>
       </div>
       <div class="lost-item">
@@ -632,98 +627,66 @@
         <div class="lost-lbl">% MG perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-red)">−{(fatLost.realMuscleG / 1000).toFixed(2).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Muscle perdu</div>
+        {#if fatLost.leanChangeKg < 0}
+          <div class="lost-val" style="color:var(--c-green)">+{Math.abs(fatLost.leanChangeKg).toFixed(2).replace('.', ',')} kg</div>
+          <div class="lost-lbl">Muscle gagné</div>
+        {:else}
+          <div class="lost-val" style="color:var(--c-red)">−{fatLost.leanChangeKg.toFixed(2).replace('.', ',')} kg</div>
+          <div class="lost-lbl">Muscle perdu</div>
+        {/if}
       </div>
       <div class="lost-item">
         <div class="lost-val" style="color:var(--c-blue)">{fatLost.bfNow.toFixed(1).replace('.', ',')} %</div>
         <div class="lost-lbl">% MG</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Mesuré depuis J1 (tes pesées + %MG) · masse maigre dont eau/glycogène −{(fatLost.waterG / 1000).toFixed(2).replace('.', ',')} kg</div>
+    <div class="caption" style="margin-top:8px">Mesuré depuis J1 sur tes pesées + %MG{#if fatLost.leanChangeKg < 0} · tu perds du gras ET gagnes du muscle (recomposition) 💪{/if}</div>
+  </div>
+
+  {#if progStats.expectedSoFar > 0 && progStats.totalCible > 0}
+  {@const futFrac = Math.max(0, (progStats.totalCible - progStats.expectedSoFar) / progStats.expectedSoFar)}
+  {@const futFatKg = Math.max(0, fatLost.fatLostKg) * futFrac}
+  {@const endW = fatLost.nowW - futFatKg}
+  {@const endFat = fatLost.nowFat - futFatKg}
+  {@const endBf = endW > 0 ? Math.max(0, endFat / endW * 100) : fatLost.bfNow}
+  {@const totWeightKg = fatLost.startW - endW}
+  {@const totFatKg = fatLost.startFat - endFat}
+  <div class="card lost-card">
+    <div class="section-title-inline">Projection à ton rythme actuel (J{totalDays})</div>
+    <div class="lost-grid">
+      <div class="lost-item">
+        <div class="lost-val">−{totWeightKg.toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{totFatKg.toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Gras perdu</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-blue)">{endW.toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-lbl">Poids</div>
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - endBf).toFixed(1).replace('.', ',')} %</div>
+        <div class="lost-lbl">% MG perdu</div>
+      </div>
+      <div class="lost-item">
+        {#if fatLost.leanChangeKg < 0}
+          <div class="lost-val" style="color:var(--c-green)">+{Math.abs(fatLost.leanChangeKg).toFixed(2).replace('.', ',')} kg</div>
+          <div class="lost-lbl">Muscle</div>
+        {:else}
+          <div class="lost-val" style="color:var(--c-red)">−{fatLost.leanChangeKg.toFixed(2).replace('.', ',')} kg</div>
+          <div class="lost-lbl">Muscle</div>
+        {/if}
+      </div>
+      <div class="lost-item">
+        <div class="lost-val" style="color:var(--c-blue)">{endBf.toFixed(1).replace('.', ',')} %</div>
+        <div class="lost-lbl">% MG</div>
+      </div>
+    </div>
+    <div class="caption" style="margin-top:8px">Si tu perds du gras à ce rythme jusqu'à la fin du programme et que tu conserves ton muscle actuel</div>
   </div>
   {/if}
-
-  {#if fatLost && progStats.expectedSoFar > 0 && progStats.totalCible > 0}
-  {@const futFrac = Math.max(0, (progStats.totalCible - progStats.expectedSoFar) / progStats.expectedSoFar)}
-  {@const ratioP = Math.max(0, Math.min(1, progStats.protPct))}
-  {@const futFatG = fatLost.g * futFrac}
-  {@const futLeanG = fatLost.leanG * futFrac}
-  {@const futMuscG = futLeanG * (0.20 + 0.40 * (1 - ratioP))}
-  {@const pFat = fatLost.g + futFatG}
-  {@const pMusc = fatLost.realMuscleG + futMuscG}
-  {@const pWater = Math.min(fatLost.waterG + (futLeanG - futMuscG), 1750)}
-  {@const pWEnd = fatLost.nowW - (futFatG + futLeanG) / 1000}
-  {@const pBfEnd = pWEnd > 0 ? Math.max(0, (fatLost.nowFat - futFatG / 1000) / pWEnd * 100) : fatLost.bfNow}
-  {@const pLostG = Math.round((fatLost.startW - pWEnd) * 1000)}
-  <div class="card lost-card">
-    <div class="section-title-inline">Projection à mes macros actuelles (J{totalDays})</div>
-    <div class="lost-grid">
-      <div class="lost-item">
-        <div class="lost-val">−{(pLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(pFat / 1000).toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Gras perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{pWEnd.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - pBfEnd).toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-red)">−{(pMusc / 1000).toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Muscle perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{pBfEnd.toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG</div>
-      </div>
-    </div>
-    <div class="caption" style="margin-top:8px">Si je garde ce rythme et mes macros actuelles jusqu'à la fin du programme · dont eau/glycogène −{(pWater / 1000).toFixed(1).replace('.', ',')} kg</div>
-  </div>
-
-  {@const oFutFatG = fatLost.g * futFrac}
-  {@const oFat = fatLost.g + oFutFatG}
-  {@const oMusc = fatLost.realMuscleG}
-  {@const oWater = fatLost.waterG}
-  {@const oWEnd = fatLost.nowW - oFutFatG / 1000}
-  {@const oBfEnd = oWEnd > 0 ? Math.max(0, (fatLost.nowFat - oFutFatG / 1000) / oWEnd * 100) : fatLost.bfNow}
-  {@const oLostG = Math.round((fatLost.startW - oWEnd) * 1000)}
-  <div class="card lost-card">
-    <div class="section-title-inline">Projection si je passe à 152 g dès maintenant (J{totalDays})</div>
-    <div class="lost-grid">
-      <div class="lost-item">
-        <div class="lost-val">−{(oLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(oFat / 1000).toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Gras perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{oWEnd.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - oBfEnd).toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-red)">−{(oMusc / 1000).toFixed(2).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Muscle perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{oBfEnd.toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG</div>
-      </div>
-    </div>
-    <div class="caption" style="margin-top:8px">Même rythme de gras, mais protéines à 152 g/j → 0 perte de muscle jusqu'à la fin (le muscle conservé fait baisser le %MG)</div>
-  </div>
   {/if}
 
   <div class="section-label" style="margin-top:0">Aujourd'hui</div>
