@@ -30,10 +30,11 @@
     // cohérence mensuelle : déficit cumulé vs perte de poids mesurée
     const _MO = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
     const byMonth: any = {};
+    const J1recon = dsToMs('16/06/2026'); // début du programme (J1)
     for (const r of tl.list as any[]) {
-      if (!r.logged || r.deficit == null || r.isFuture) continue;
+      if (!r.logged || r.deficit == null || r.isFuture || r.t < J1recon) continue;
       const dt = new Date(r.t);
-      const key = dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0');
+      const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
       if (!byMonth[key]) byMonth[key] = { def: 0, days: 0, recs: [] };
       byMonth[key].def += r.deficit; byMonth[key].days++; byMonth[key].recs.push(r);
     }
