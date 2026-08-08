@@ -175,25 +175,27 @@
     return g >= 1000 ? (g / 1000).toFixed(2).replace('.', ',') + ' kg' : Math.round(g) + ' g';
   }
   const fatLost = $derived.by(() => {
-    const w = nfp(profile.weight), bf = nfp(profile.bf);
-    if (!w || !bf) return null;
-    const fatKcal = Math.max(0, progStats.fatKcal);      // gras net
-    const leanKcal = Math.max(0, progStats.leanKcalDef); // masse maigre perdue (jours en deficit)
-    if (fatKcal <= 0 && leanKcal <= 0) return null;
-    const kg = fatKcal / 7700;
-    const leanG = Math.round(leanKcal / 1850 * 1000); // masse maigre humide (muscle + eau/glycogene)
-    // Part de VRAI muscle : 20 % (proteines a la cible) -> 60 % (loin de la cible)
+    // ancré sur les pesées MESURÉES (poids + %MG saisis) : vérité, pas modèle
+    const meas: any[] = [];
+    for (const k of Object.keys(days as any)) {
+      const d: any = (days as any)[k]; const w = nfp(d?.weight), bf = nfp(d?.bf);
+      if (w > 0 && bf > 0) { const pr = k.split('/').map(Number); if (pr.length === 3) meas.push({ t: new Date(pr[2], pr[1]-1, pr[0]).getTime(), w, bf, fat: w * bf / 100 }); }
+    }
+    meas.sort((a, b) => a.t - b.t);
+    if (meas.length < 1) return null;
+    const start = meas[0], now = meas[meas.length - 1];
+    const fatLostKg = Math.max(0, start.fat - now.fat);
+    const leanLostKg = Math.max(0, (start.w - now.w) - (start.fat - now.fat));
     const ratio = Math.max(0, Math.min(1, progStats.protPct));
-    let realMuscleG = Math.round(leanG * (0.20 + 0.40 * (1 - ratio)));
-    let waterG = leanG - realMuscleG;
-    const WATER_CAP = 1750; // l'eau/glycogene est un STOCK, l'excedent devient du muscle
-    if (waterG > WATER_CAP) { realMuscleG += waterG - WATER_CAP; waterG = WATER_CAP; }
-    const totalLostKg = kg + leanG / 1000;
-    const fatInit = w * bf / 100;
-    const fatNow = Math.max(0, fatInit - kg);
-    const wNow = w - totalLostKg;
-    const bfNow = wNow > 0 ? fatNow / wNow * 100 : bf;
-    return { g: Math.round(kg * 1000), leanG, realMuscleG, waterG, bf, bfNow: +bfNow.toFixed(1) };
+    let muscleKg = leanLostKg * (0.20 + 0.40 * (1 - ratio));
+    let waterKg = leanLostKg - muscleKg;
+    if (waterKg > 1.75) { muscleKg += waterKg - 1.75; waterKg = 1.75; }
+    return {
+      g: Math.round(fatLostKg * 1000), leanG: Math.round(leanLostKg * 1000),
+      realMuscleG: Math.round(muscleKg * 1000), waterG: Math.round(waterKg * 1000),
+      bf: +start.bf.toFixed(1), bfNow: +now.bf.toFixed(1),
+      startW: start.w, nowW: now.w, startFat: start.fat, nowFat: now.fat,
+    };
   });
   // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
   function effDeficit(j: any): number {
@@ -329,7 +331,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V11.2";
+  const BUILD = "V11.3";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -465,74 +467,42 @@
   let coachError = $state('');
 
   function buildCoachSummary() {
-    const data = get(appData) as any;
-    const p = data?.profile ?? {};
-    const jours: any[] = progJours;
-    const w = parseFloat(p.weight) || 0;
-    const bf = parseFloat(p.bf) || 0;
-    const bft = parseFloat(p.bft) || 0;
-    const todayD = new Date(); todayD.setHours(0,0,0,0);
-
-    // Projection MG finale
-    let mgFinale: number | null = null;
-    if (w && bf) {
-      const totalDef = jours.reduce((s: number, j: any) => s + effDeficit(j), 0);
-      if (totalDef > 0) {
-        const kgLost = totalDef / 7700;
-        const fatInit = w * bf / 100;
-        const fatFinal = Math.max(0, fatInit - kgLost);
-        const wFinal = w - kgLost;
-        mgFinale = wFinal > 0 ? +((fatFinal / wFinal) * 100).toFixed(1) : null;
-      }
+    const p = profile as any;
+    const bft = nfp(p.bft) || 20;
+    // état mesuré actuel (dernière pesée) + départ
+    const meas: any[] = [];
+    for (const k of Object.keys(days as any)) {
+      const d: any = (days as any)[k]; const w = nfp(d?.weight), bf = nfp(d?.bf);
+      if (w > 0 && bf > 0) { const pr = k.split('/').map(Number); if (pr.length === 3) meas.push({ t: new Date(pr[2], pr[1]-1, pr[0]).getTime(), w, bf }); }
     }
-
-    // Objectif kcal total
-    let deficitCibleTotal: number | null = null;
-    if (w && bf && bft && bft < bf) {
-      const lean = w * (1 - bf / 100);
-      const targetW = lean / (1 - bft / 100);
-      deficitCibleTotal = Math.round((w - targetW) * 7700);
-    }
-
-    // Jours loggés + macros vs cibles
-    let jLogged = 0, retardKcal = 0;
-    let sumP = 0, sumG = 0, sumL = 0;
-    let cibP = 0, cibG = 0, cibL = 0;
-    jours.forEach((j: any) => {
-      const jd = parseJour(j.jour);
-      if (!jd) return;
-      jd.setHours(0,0,0,0);
-      if (jd >= todayD) return;
-      const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-      const day = (days as any)[key];
-      if (!day?.foods?.length) return;
-      if (/libre/i.test(j.type || '')) return;
-      jLogged++;
-      const eaten = Math.round(day.foods.reduce((s: number, f: any) => s + f.k, 0));
-      retardKcal += eaten - (j.calories || 0);
-      sumP += day.foods.reduce((s: number, f: any) => s + (f.p || 0), 0);
-      sumG += day.foods.reduce((s: number, f: any) => s + (f.g || 0), 0);
-      sumL += day.foods.reduce((s: number, f: any) => s + (f.l || 0), 0);
-      cibP += j.proteines_g || 0; cibG += j.glucides_g || 0; cibL += j.lipides_g || 0;
-    });
-
-    const lastJ = jours[jours.length - 1];
+    meas.sort((a, b) => a.t - b.t);
+    const nowM = meas.length ? meas[meas.length - 1] : null;
+    const curW = nowM ? nowM.w : nfp(p.weight);
+    const curBf = nowM ? nowM.bf : nfp(p.bf);
+    const loggedDays = (timeline as any).list.filter((r: any) => r.logged && !r.isFuture).length;
+    const cumulReel = Math.round(progStats.realBrule);
+    const avgDef = loggedDays ? Math.round(cumulReel / loggedDays) : 0;
+    const lean = curW * (1 - curBf / 100);
+    const targetW = bft > 0 ? lean / (1 - bft / 100) : curW;
+    const kgFatToLose = Math.max(0, curW - targetW);
+    const kcalToLose = Math.round(kgFatToLose * 7700);
+    const joursEstimes = avgDef > 0 ? Math.round(kcalToLose / avgDef) : null;
+    const avg = avgMacros;
+    const lastJ = progJours.length ? progJours[progJours.length - 1] : null;
+    const y = todayDate.getFullYear(), m = String(todayDate.getMonth()+1).padStart(2,'0'), d2 = String(todayDate.getDate()).padStart(2,'0');
     return {
-      profil: { sexe: p.sex, age: parseFloat(p.age) || 0, poids_kg: w, masse_grasse_pct: bf },
-      programme: {
-        date_fin: lastJ?.jour ?? null,
-        masse_grasse_finale_projetee_pct: mgFinale,
-        jours_logges: jLogged,
-        retard_kcal: Math.round(retardKcal),
-        heures_velo_a_rattraper: retardKcal > 0 ? +(retardKcal / 500).toFixed(1) : 0,
-        macros_reelles: { proteines_g: Math.round(sumP), glucides_g: Math.round(sumG), lipides_g: Math.round(sumL) },
-        macros_cibles: { proteines_g: Math.round(cibP), glucides_g: Math.round(cibG), lipides_g: Math.round(cibL) },
-      },
+      date_aujourdhui: `${y}-${m}-${d2}`,
+      profil: { sexe: p.sex, age: nfp(p.age), taille_cm: nfp(p.height) },
+      etat_actuel_mesure: { poids_kg: +curW.toFixed(1), masse_grasse_pct: +curBf.toFixed(1) },
+      objectif: { masse_grasse_cible_pct: bft, kg_gras_a_perdre: +kgFatToLose.toFixed(1), date_fin_programme: lastJ?.jour ?? null },
       progression: {
-        deficit_cumule: Math.round(cumul),
-        deficit_cible_total: deficitCibleTotal,
-        pct_objectif: deficitCibleTotal ? +((cumul / deficitCibleTotal) * 100).toFixed(1) : null,
+        jours_logges: loggedDays,
+        deficit_cumule_reel_kcal: cumulReel,
+        deficit_moyen_par_jour_kcal: avgDef,
+        jours_estimes_pour_objectif: joursEstimes,
       },
+      macros_moyennes_par_jour: avg ? { proteines_g: avg.p, glucides_g: avg.g, lipides_g: avg.l } : null,
+      cible_proteines_g: Math.round(2.2 * lean),
     };
   }
 
@@ -591,9 +561,7 @@
   {/if}
 
   <!-- Coach IA -->
-  <div class="hero-row">
-    <!-- Cible du jour -->
-    <div class="card hero-card hero-eat">
+  <div class="card hero-card hero-eat">
       <div class="label">Journée à</div>
       {#if tIntake > 0}
         {@const reste = tIntake - macros.k}
@@ -606,22 +574,7 @@
         <div class="caption" style="margin-top:6px">Aucune cible programme</div>
       {/if}
     </div>
-    <!-- Retard programme -->
-    <div class="card hero-card hero-retard">
-      <div class="label">Retard programme</div>
-      {#if expectedDeficit === 0}
-        <div class="hero-num no-data">—</div>
-        <div class="caption" style="margin-top:6px">Pas encore de données</div>
-      {:else if retard > 0}
-        {@const heures = Math.ceil(retard / 500)}
-        <div class="hero-num" style="color:var(--c-red)">+{Math.round(retard).toLocaleString('fr')}<span class="hero-unit">kcal</span></div>
-        <div class="caption" style="margin-top:6px">≈ {heures}h de vélo à rattraper</div>
-      {:else}
-        <div class="hero-num" style="color:var(--c-green)">{Math.round(retard).toLocaleString('fr')}<span class="hero-unit">kcal</span></div>
-        <div class="caption" style="margin-top:6px">En avance sur le programme</div>
-      {/if}
-    </div>
-  </div>
+
 
   <div class="card coach-card">
     <button class="coach-btn" onclick={runCoach} disabled={coachLoading}>
@@ -671,7 +624,7 @@
         <div class="lost-lbl">Gras perdu</div>
       </div>
       <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{((nfp(profile.weight) || 100) - totalLostG / 1000).toFixed(1).replace('.', ',')} kg</div>
+        <div class="lost-val" style="color:var(--c-blue)">{fatLost.nowW.toFixed(1).replace('.', ',')} kg</div>
         <div class="lost-lbl">Poids</div>
       </div>
       <div class="lost-item">
@@ -687,7 +640,7 @@
         <div class="lost-lbl">% MG</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Déduit du déficit cumulé et de ta moyenne de protéines · dont eau/glycogène −{(fatLost.waterG / 1000).toFixed(2).replace('.', ',')} kg</div>
+    <div class="caption" style="margin-top:8px">Mesuré depuis J1 (tes pesées + %MG) · masse maigre dont eau/glycogène −{(fatLost.waterG / 1000).toFixed(2).replace('.', ',')} kg</div>
   </div>
   {/if}
 
@@ -698,8 +651,8 @@
   {@const pWaterRaw = fatLost.waterG * pScale}
   {@const pWater = Math.min(pWaterRaw, 1750)}
   {@const pMusc = fatLost.realMuscleG * pScale + (pWaterRaw - pWater)}
-  {@const pW0 = nfp(profile.weight) || 100}
-  {@const pFatInit = pW0 * fatLost.bf / 100}
+  {@const pW0 = fatLost.startW}
+  {@const pFatInit = fatLost.startFat}
   {@const pWEnd = pW0 - (pFat + pLean) / 1000}
   {@const pBfEnd = pWEnd > 0 ? Math.max(0, (pFatInit - pFat / 1000) / pWEnd * 100) : fatLost.bf}
   <div class="card lost-card">
