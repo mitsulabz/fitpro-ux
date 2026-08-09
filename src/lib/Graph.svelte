@@ -15,7 +15,6 @@
     const days = data.days ?? {};
     const acts = data.programme?.activites ?? {};
     const J1 = Date.UTC(2026, 5, 16);      // 16 juin 2026
-    const JULY31 = Date.UTC(2026, 6, 31);  // 31 juillet 2026
     const nowMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
     const log = (Array.isArray(data.programme?.settingsLog) && data.programme.settingsLog.length)
       ? data.programme.settingsLog : [{ from: '16/06/2026', baseRef: 2020, poidsRef: 97.92, adaptCoef: ADAPT_DEFAULT }];
@@ -57,7 +56,7 @@
       pts.push({ t, w, f: bfv > 0 ? +(w * bfv / 100).toFixed(1) : null, adj: rec && rec.poidsAjuste != null ? rec.poidsAjuste : null });
     }
     pts.sort((a, b) => a.t - b.t);
-    const history = pts.filter((pt) => pt.t >= J1 && pt.t <= JULY31);
+    const history = pts.filter((pt) => pt.t >= J1); // jusqu'a la derniere pesee (aujourd'hui)
     const last = pts[pts.length - 1];
     const W0 = last?.w || nf(p.weight) || 97.95;
     const lastBf = last && last.f ? (last.f / last.w * 100) : (nf(p.bf) || 30.5);

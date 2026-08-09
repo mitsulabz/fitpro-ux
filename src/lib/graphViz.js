@@ -51,7 +51,7 @@ export function initGraphViz(root, seed) {
 <section id="reconSec"><h2>Cohérence : déficit ↔ poids réel</h2><div class="h2sub">Ton déficit cumulé colle-t-il à ta perte de poids mesurée, mois par mois ?</div><div id="reconTbl"></div></section>
 <section id="histSec">
 <h2>Historique réel</h2>
-<div class="h2sub">Tes pesées et masse grasse saisies dans Suivi · 16 juin → 31 juillet 2026</div>
+<div class="h2sub" id="histSub">Tes pesées et masse grasse saisies dans Suivi</div>
 <div class="cw" id="histCw"></div>
 <div class="legend"><span><span class="sw" style="border-color:var(--s1)"></span>poids</span><span><span class="sw" style="border-color:var(--s2)"></span>masse grasse</span><span><span class="sw" style="border-color:var(--s3)"></span>poids ajusté (glycogène)</span></div>
 <div id="waterBanner"></div>
@@ -333,6 +333,8 @@ export function initGraphViz(root, seed) {
     const HP = histPanel('H', seed.history);
     document.getElementById('histCw').innerHTML = HP.svg + `<div class="tip" id="tipH"></div>`;
     histHover('H', seed.history, HP);
+    const hsub = document.getElementById('histSub');
+    if (hsub) hsub.textContent = `Tes pesées et masse grasse saisies dans Suivi · ${fshort(seed.history[0].t)} → ${fdate(seed.history[seed.history.length-1].t)}`;
     const wb = document.getElementById('waterBanner');
     if (wb) wb.innerHTML = seed.waterBanner ? `<div class="water-banner">💧 ${seed.waterBanner}</div>` : '';
   } else {
