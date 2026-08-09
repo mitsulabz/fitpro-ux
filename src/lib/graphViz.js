@@ -209,7 +209,7 @@ export function initGraphViz(root, seed) {
       cw.innerHTML=PP.svg+`<div class="tip" id="tip${P.id}"></div>`;
       sec.querySelector('.tbl').innerHTML=`<table><thead><tr><th>Date</th><th>Poids</th><th>Gras kg</th><th>Gras %</th><th>IMC</th><th>Apport</th></tr></thead><tbody>${
         C.map(p=>`<tr><td>${P.daily?fdate(p.t):fmon(p.t)}</td><td>${p.w.toFixed(2).replace('.',',')}</td><td>${p.f.toFixed(1).replace('.',',')}</td><td>${(100*p.f/p.w).toFixed(1).replace('.',',')}</td><td>${(p.w/3.24).toFixed(1).replace('.',',')}</td><td>${p.kcal}</td></tr>`).join('')}</tbody></table>`;
-      if(C.length) hover(P.id,C,PP);
+      hover(P.id,C,PP,P.t0,P.t1);
       sec.querySelector('[data-seg]').onclick=e=>{const b2=e.target.closest('button'); if(!b2)return;
         if(mode==='def')P.def=+b2.dataset.v; else P.app=+b2.dataset.v; render(); saveState();};
       const ae=sec.querySelector('[data-acts]');
@@ -220,25 +220,37 @@ export function initGraphViz(root, seed) {
     });
     document.getElementById('segMode').onclick=e=>{const b=e.target.closest('button'); if(!b)return; mode=b.dataset.v; render(); saveState();};
   }
-  function hover(id,C,P){
+  function hover(id,C,P,t0,t1){
     const svg=document.getElementById('svg'+id), tip=document.getElementById('tip'+id);
     const hit=document.getElementById(id+'hit'),crs=document.getElementById(id+'crs');
     const h=[0,1,2].map(i=>document.getElementById(id+'h'+i));
     if(!hit) return;
+    // survolables : pesées réelles avant aujourd'hui (à gauche) + projection (à droite)
+    const mHist=MEAS.filter(m=>m.w!=null&&m.t>=t0&&m.t<TODAY).map(m=>({t:m.t,meas:m}));
+    const ALL=mHist.concat(C.map(p=>({t:p.t,proj:p}))).sort((a,b)=>a.t-b.t);
+    if(!ALL.length) return;
     const move=e=>{const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)*P.W/r.width;
-      let best=C[0]; for(const p of C) if(Math.abs(P.X(p.t)-sx)<Math.abs(P.X(best.t)-sx)) best=p;
+      let best=ALL[0]; for(const p of ALL) if(Math.abs(P.X(p.t)-sx)<Math.abs(P.X(best.t)-sx)) best=p;
       const x=P.X(best.t); crs.setAttribute('x1',x); crs.setAttribute('x2',x); crs.style.opacity=1;
-      [best.w,best.f,best.kcal].forEach((v,i)=>{h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
-      let mReal='';
-      { let md=null,mdist=1.5*86400000; for(const m of MEAS){const dd=Math.abs(m.t-best.t); if(dd<mdist){mdist=dd; md=m;}}
-        if(md&&md.w!=null){ mReal=`<div style="border-top:1px solid var(--line);margin:5px 0 0;padding-top:5px;color:var(--text-secondary)">↓ ta mesure réelle (${fdate(md.t)})</div>`
-          +`<div><span><i style="background:var(--s1)"></i>Poids réel</span><span>${md.w.toFixed(2).replace('.',',')} kg</span></div>`
-          +(md.f!=null?`<div><span><i style="background:var(--s2)"></i>MG réelle</span><span>${md.f.toFixed(1).replace('.',',')} kg (${(100*md.f/md.w).toFixed(1).replace('.',',')} %)</span></div>`:''); } }
-      tip.innerHTML=`<b>${fdate(best.t)} — projeté</b>
-        <div><span><i style="background:var(--s1)"></i>Poids</span><span>${best.w.toFixed(2).replace('.',',')} kg</span></div>
-        <div><span><i style="background:var(--s2)"></i>Masse grasse</span><span>${best.f.toFixed(1).replace('.',',')} kg</span></div>
-        <div><span>Taux de graisse</span><span>${(100*best.f/best.w).toFixed(1).replace('.',',')} %</span></div>
-        <div><span><i style="background:var(--s3)"></i>Apport</span><span>${best.kcal} kcal</span></div>`+mReal;
+      if(best.meas){ const m=best.meas;
+        [m.w,m.f].forEach((v,i)=>{ if(v==null){h[i].style.opacity=0;return;} h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
+        h[2].style.opacity=0;
+        tip.innerHTML=`<b>${fdate(m.t)} — mesuré</b>`
+          +`<div><span><i style="background:var(--s1)"></i>Poids réel</span><span>${m.w.toFixed(2).replace('.',',')} kg</span></div>`
+          +(m.f!=null?`<div><span><i style="background:var(--s2)"></i>MG réelle</span><span>${m.f.toFixed(1).replace('.',',')} kg</span></div><div><span>Taux de graisse</span><span>${(100*m.f/m.w).toFixed(1).replace('.',',')} %</span></div>`:'');
+      } else { const b=best.proj;
+        [b.w,b.f,b.kcal].forEach((v,i)=>{h[i].setAttribute('cx',x);h[i].setAttribute('cy',P.yy[i](v));h[i].style.opacity=1;});
+        let mReal='';
+        { let md=null,mdist=1.5*86400000; for(const mm of MEAS){const dd=Math.abs(mm.t-b.t); if(dd<mdist){mdist=dd; md=mm;}}
+          if(md&&md.w!=null){ mReal=`<div style="border-top:1px solid var(--line);margin:5px 0 0;padding-top:5px;color:var(--text-secondary)">↓ ta mesure réelle (${fdate(md.t)})</div>`
+            +`<div><span><i style="background:var(--s1)"></i>Poids réel</span><span>${md.w.toFixed(2).replace('.',',')} kg</span></div>`
+            +(md.f!=null?`<div><span><i style="background:var(--s2)"></i>MG réelle</span><span>${md.f.toFixed(1).replace('.',',')} kg (${(100*md.f/md.w).toFixed(1).replace('.',',')} %)</span></div>`:''); } }
+        tip.innerHTML=`<b>${fdate(b.t)} — projeté</b>
+          <div><span><i style="background:var(--s1)"></i>Poids</span><span>${b.w.toFixed(2).replace('.',',')} kg</span></div>
+          <div><span><i style="background:var(--s2)"></i>Masse grasse</span><span>${b.f.toFixed(1).replace('.',',')} kg</span></div>
+          <div><span>Taux de graisse</span><span>${(100*b.f/b.w).toFixed(1).replace('.',',')} %</span></div>
+          <div><span><i style="background:var(--s3)"></i>Apport</span><span>${b.kcal} kcal</span></div>`+mReal;
+      }
       const px=x*r.width/P.W;
       tip.style.left=Math.min(Math.max(px+14,4),r.width-tip.offsetWidth-4)+'px'; tip.style.opacity=1;};
     hit.addEventListener('mousemove',move);
