@@ -17,6 +17,43 @@
     URL.revokeObjectURL(url);
   }
 
+  // Journal quotidien en CSV (à donner à une IA pour analyse) :
+  // une ligne par jour depuis le J1 — apport + macros, Sport cal, poids, %MG.
+  function exportJournal() {
+    const data = $appData as any;
+    if (!data) return;
+    const days = data.days ?? {};
+    const rows = ['date,kcal_mangees,proteines_g,glucides_g,lipides_g,sport_kcal_actives,poids_kg,masse_grasse_pct'];
+    const j1 = new Date(2026, 5, 22); // J1 du régime (22 juin 2026)
+    const end = new Date(); end.setHours(0, 0, 0, 0);
+    for (const c = new Date(j1); c.getTime() <= end.getTime(); c.setDate(c.getDate() + 1)) {
+      const ds = c.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const dd: any = days[ds] ?? {};
+      const fds = dd.foods ?? [];
+      const logged = fds.length > 0;
+      const sum = (key: string) => fds.reduce((s: number, f: any) => s + (f[key] || 0), 0);
+      const iso = `${c.getFullYear()}-${String(c.getMonth() + 1).padStart(2, '0')}-${String(c.getDate()).padStart(2, '0')}`;
+      const w = nf(dd.weight), bf = nf(dd.bf);
+      rows.push([
+        iso,
+        logged ? Math.round(sum('k')) : '',
+        logged ? +sum('p').toFixed(1) : '',
+        logged ? +sum('g').toFixed(1) : '',
+        logged ? +sum('l').toFixed(1) : '',
+        logged ? Math.round(nf(dd.extraKcal)) : '',
+        w > 0 ? w : '',
+        bf > 0 ? bf : '',
+      ].join(','));
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fitpro-journal-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   let importStatus = $state('');
   let fileInput: HTMLInputElement;
 
@@ -165,6 +202,10 @@
 
   <div class="section-title">Données</div>
   <div class="section">
+    <button class="card setting-row" onclick={exportJournal}>
+      <span class="body">Exporter le journal (CSV pour IA)</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
     <button class="card setting-row" onclick={exportData}>
       <span class="body">Exporter tout (JSON)</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -190,7 +231,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V13.1</div>
+  <div class="version caption">FitProX · V13.2</div>
 </div>
 
 <style>
