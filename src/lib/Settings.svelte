@@ -17,18 +17,6 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportProgramme() {
-    const prog = ($appData as any)?.programme;
-    if (!prog) { alert('Aucun programme trouvé'); return; }
-    const blob = new Blob([JSON.stringify(prog, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fitpro-programme-${new Date().toLocaleDateString('fr-FR').replace(/\//g,'-')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   let importStatus = $state('');
   let fileInput: HTMLInputElement;
 
@@ -58,13 +46,11 @@
   });
   const recalib = $derived.by(() => {
     const data = $appData as any; if (!data) return null;
-    const days = data.days ?? {}; const acts = data.programme?.activites ?? {};
+    const days = data.days ?? {};
     const dateList = Object.keys(days).map((ds: string) => ({ ds, t: dsToMs(ds) })).filter((x: any) => !isNaN(x.t)).sort((a: any, b: any) => a.t - b.t);
     const info = (ds: string) => {
       const dd: any = days[ds] ?? {}; const fds = dd.foods ?? [];
-      const pa = dd.progActivity; const actName = pa === false ? '' : (pa?.name ?? '');
-      const sportKcal = (actName && actName !== 'Libre') ? (acts[actName] ?? 0) : 0;
-      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal, libre: actName === 'Libre', logged: fds.length > 0 };
+      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal: 0, libre: !!dd.libre, logged: fds.length > 0 };
     };
     const tl = buildTimeline({ dateList, settingsLog: effectiveLog(data), todayTime: todayMs, dayFrac: 1, info });
     return recalibrate(tl);
@@ -101,16 +87,17 @@
       const s = $session;
       if (!s) { importStatus = 'Non connecté'; return; }
 
-      let newData: Record<string, unknown>;
-
-      if (json.jours && Array.isArray(json.jours)) {
-        newData = { ...($appData as any), programme: json };
-        // Debug : affiche le type du jour 18 juin
-        const j18 = json.jours.find((j: any) => (j.jour ?? '').includes('18 juin') || (j.jour ?? '').includes('18/06'));
-        console.log('Import — 18 juin type:', j18?.type, 'jour:', j18?.jour);
-      } else {
-        newData = json;
+      // Garde-fou : l'import remplace TOUT l'état cloud — on n'accepte qu'un export complet.
+      if (!json || typeof json !== 'object' || Array.isArray(json)) {
+        importStatus = 'Fichier invalide : pas un export FitProX.'; fileInput.value = ''; return;
       }
+      if ((json as any).jours && !(json as any).days) {
+        importStatus = 'Fichier « programme » (obsolète) refusé — importe un export complet.'; fileInput.value = ''; return;
+      }
+      if (!(json as any).days && !(json as any).profile) {
+        importStatus = 'Fichier refusé : il ne contient ni jours ni profil (export complet requis).'; fileInput.value = ''; return;
+      }
+      const newData: Record<string, unknown> = json;
 
       importStatus = 'Sauvegarde…';
       const r = await fetch(`https://arydsxswhbgpfayjgtak.supabase.co/rest/v1/app_state`, {
@@ -182,12 +169,8 @@
       <span class="body">Exporter tout (JSON)</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </button>
-    <button class="card setting-row" onclick={exportProgramme}>
-      <span class="body">Exporter le programme</span>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    </button>
     <button class="card setting-row" onclick={triggerImport}>
-      <span class="body">Importer un programme / JSON</span>
+      <span class="body">Importer un export (JSON)</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="transform:scaleY(-1)" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </button>
     <input bind:this={fileInput} type="file" accept=".json" onchange={onFileChange} style="display:none" />
@@ -207,7 +190,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V12.6</div>
+  <div class="version caption">FitProX · V13.0</div>
 </div>
 
 <style>

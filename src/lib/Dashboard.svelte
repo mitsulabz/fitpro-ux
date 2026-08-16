@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t, appData, session, persistSession } from "./store";
-  import { nf, calcBMR } from './calc';
+  import { nf } from './calc';
   import { buildTimeline, sundayRule, APPORT_FLOOR } from './engine';
   import { saveAppState, refreshToken } from "./supabase";
   import { get } from "svelte/store";
@@ -31,11 +31,11 @@
   const dayFrac = Math.min(1, (nowD.getHours() * 60 + nowD.getMinutes()) / (24 * 60));
   const heureLabel = nowD.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  const prog = $derived(($appData as any)?.programme ?? {});
-  const progJours = $derived(prog?.jours ?? []);
+  // Bornes du régime : J1 fixe, horizon = objectif du 1er novembre (Toulouse)
+  const J1_DS = '16/06/2026';
+  const END_DS = '01/11/2026';
   const avgMacros = $derived.by(() => {
-    const jours: any[] = progJours;
-    const j1 = jours.length ? parseJour(jours[0].jour) : null;
+    const j1 = parseJour(J1_DS);
     if (j1) j1.setHours(0, 0, 0, 0);
     let sp = 0, sg = 0, sl = 0, n = 0;
     Object.entries((days as any) ?? {}).forEach(([k, d]: [string, any]) => {
@@ -62,30 +62,26 @@
   const settingsLog = $derived.by(() => {
     const log = ($appData as any)?.programme?.settingsLog;
     if (Array.isArray(log) && log.length) return log;
-    const j1 = progJours.length ? parseJour(progJours[0].jour) : null;
-    const from = j1 ? j1.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '16/06/2026';
-    return [{ from, baseRef: 2020, poidsRef: 97.92, adaptCoef: 0.12 }];
+    return [{ from: J1_DS, baseRef: 2020, poidsRef: 97.92, adaptCoef: 0.12 }];
   });
   const timeline = $derived.by(() => {
-    const acts = (prog?.activites ?? {}) as Record<string, number>;
-    const jByDs: any = {}; const dateList: any[] = [];
-    for (const j of progJours) {
-      const jd = parseJour(j.jour); if (!jd) continue; jd.setHours(0,0,0,0);
-      const ds = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-      jByDs[ds] = j; dateList.push({ ds, t: jd.getTime() });
+    // un jour = une entrée, du J1 à l'objectif ; le sport vient du champ « Sport cal » (extraKcal)
+    const start = parseJour(J1_DS)!; start.setHours(0,0,0,0);
+    const end = parseJour(END_DS)!; end.setHours(0,0,0,0);
+    const dateList: any[] = [];
+    for (const c = new Date(start); c.getTime() <= end.getTime(); c.setDate(c.getDate() + 1)) {
+      const d0 = new Date(c); d0.setHours(0,0,0,0);
+      dateList.push({ ds: d0.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }), t: d0.getTime() });
     }
-    dateList.sort((a: any,b: any)=>a.t-b.t);
     const info = (ds: string) => {
-      const dd = (days as any)[ds] ?? {}; const j = jByDs[ds];
+      const dd = (days as any)[ds] ?? {};
       const fds = dd.foods ?? [];
-      const act = j ? actOf(j, ds) : '';
-      const sportKcal = (act && act !== 'Libre') ? (acts[act] ?? 0) : 0;
       return {
         weight: nf(dd.weight), bf: nf(dd.bf),
         eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0),
         gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0),
         prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0),
-        extraKcal: dd.extraKcal ?? 0, sportKcal, libre: act === 'Libre', logged: fds.length>0,
+        extraKcal: dd.extraKcal ?? 0, sportKcal: 0, libre: !!dd.libre, logged: fds.length>0,
       };
     };
     return buildTimeline({ dateList, settingsLog, todayTime: todayDate.getTime(), dayFrac, info });
@@ -98,14 +94,6 @@
     { k:0, p:0, g:0, l:0 }
   ));
 
-  const progIdx = $derived(progJours.findIndex((j: any) => {
-    const d = parseJour(j.jour);
-    if (!d) return false;
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() === todayDate.getTime();
-  }));
-
-  const progDay = $derived(progIdx >= 0 ? progJours[progIdx] : null);
   const tdeeToday = $derived(todayRec ? Math.round(todayRec.base + todayRec.sportK) : 0);
   const tBrulees = $derived(tdeeToday);
   const tIntake = $derived(todayRec
@@ -136,21 +124,15 @@
     return { p, g, l };
   });
 
-  const totalDays = $derived(progJours.length);
-  const dayNum = $derived(progIdx >= 0 ? progIdx + 1 : null);
+  const totalDays = $derived((timeline as any).list.length);
+  const dayNum = $derived.by(() => {
+    const j1 = parseJour(J1_DS)!; j1.setHours(0,0,0,0);
+    const n = Math.round((todayDate.getTime() - j1.getTime()) / 86400000) + 1;
+    return n >= 1 && n <= totalDays ? n : null;
+  });
   // ── Progression reelle : kcal reellement brulees / total a bruler jusqu'a la fin ──
   const profile = $derived(($appData as any)?.profile ?? {});
-  const activites = $derived((prog?.activites ?? {}) as Record<string, number>);
   const nfp = nf;
-  const bmrOf = calcBMR;
-  function actOf(j: any, ds: string): string {
-    if (typeof j?.activity === 'string') return j.activity;
-    const d = (days as any)[ds];
-    if (d?.progActivity === false) return '';
-    if (d?.progActivity?.name) return d.progActivity.name;
-    const t = j.type ?? '';
-    return /libre/i.test(t) ? 'Libre' : t;
-  }
   const progStats = $derived.by(() => {
     const w = curBody.w || 100;
     const pTargetDay = 1.6 * w;
@@ -205,61 +187,16 @@
       startW: start.w, nowW: now.w, startFat: start.fat, nowFat: now.fat,
     };
   });
-  // Parse tolerant a la virgule + deficit EFFECTIF : reel (mange-depense) pour les jours passes loggés, cible sinon
-  function effDeficit(j: any): number {
-    const jd = parseJour(j.jour); if (!jd) return j.deficit || 0;
-    const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-    const dd = (days as any)[key] ?? {};
-    const eaten = (dd.foods ?? []).reduce((a: number, f: any) => a + (f.k||0), 0);
-    const jd0 = new Date(jd); jd0.setHours(0,0,0,0);
-    if (jd0 < todayDate && eaten > 0) {
-      const exp = (j.calories_brulees ?? 0) + (dd.extraKcal ?? 0);
-      return exp - eaten; // deficit reellement realise (signe)
-    }
-    return j.deficit || 0; // jour futur / non loggé : cible planifiee
-  }
-
+  // %MG projetée au 1er novembre — même méthode MESURÉE que la cellule de projection
   const bfProjected = $derived.by(() => {
-    const p = ($appData as any)?.profile;
-    if (!p) return null;
-    const w = nf(p.weight);
-    const bf = nf(p.bf);
-    if (!w || !bf) return null;
-    const totalDef = progJours.reduce((s: number, j: any) => s + effDeficit(j), 0);
-    if (!totalDef) return null;
-    const kgLost = totalDef / 7700;
-    const fatInit = w * bf / 100;
-    const fatFinal = Math.max(0, fatInit - kgLost);
-    const wFinal = w - kgLost;
-    return wFinal > 0 ? +((fatFinal / wFinal) * 100).toFixed(1) : null;
+    if (!fatLost || !(progStats.expectedSoFar > 0 && progStats.totalCible > 0)) return null;
+    const futFrac = Math.max(0, (progStats.totalCible - progStats.expectedSoFar) / progStats.expectedSoFar);
+    const futFatKg = Math.max(0, fatLost.fatLostKg) * futFrac;
+    const endW = fatLost.nowW - futFatKg;
+    const endFat = fatLost.nowFat - futFatKg;
+    return endW > 0 ? +Math.max(0, endFat / endW * 100).toFixed(1) : null;
   });
 
-  const cumul = $derived(progJours.reduce((acc: number, j: any, idx: number) => {
-    if (idx >= Math.max(0, progIdx)) return acc;
-    const jd = parseJour(j.jour);
-    if (!jd) return acc;
-    const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-    const dayData = days[key] ?? {};
-    const eaten = (dayData.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
-    if (!eaten) return acc;
-    const exp = (j.calories_brulees ?? 0) + (dayData.extraKcal ?? 0);
-    return acc + (eaten - exp);
-  }, 0));
-
-  // Sum of programme deficits for past logged days (what the plan expected)
-  const expectedDeficit = $derived(progJours.reduce((acc: number, j: any, idx: number) => {
-    if (idx >= Math.max(0, progIdx)) return acc;
-    const jd = parseJour(j.jour);
-    if (!jd) return acc;
-    const key = jd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-    const dayData = (days as any)[key] ?? {};
-    const eaten = (dayData.foods ?? []).reduce((s: number, f: any) => s + (f.k||0), 0);
-    if (!eaten) return acc; // only count days with food logged
-    return acc + (j.deficit ?? 0);
-  }, 0));
-
-  // retard = how many kcal short of the plan (positive = behind, negative = ahead)
-  const retard = $derived(Math.round(progStats.expectedSoFar - progStats.realBrule));
   // Cumul reel = identique a la barre (deficit live, J1, jour en cours au prorata)
   const cumulReal = $derived(-Math.round(progStats.realBrule));
 
@@ -275,13 +212,13 @@
         if (t < floorTime) floorTime = t;
       }
     }
-    // plancher J1 : on ne montre rien avant le premier jour du programme
-    const j1 = progJours.length ? parseJour(progJours[0].jour) : null;
-    const j1Time = j1 ? j1.getTime() : -Infinity;
+    // plancher J1 : on ne montre rien avant le premier jour du régime
+    const j1 = parseJour(J1_DS)!; j1.setHours(0,0,0,0);
+    const j1Time = j1.getTime();
     for (let i = 1; i <= 366; i++) {
       const d = new Date(todayDate);
       d.setDate(d.getDate() - i);
-      if (d.getTime() < j1Time) break; // avant le J1 du programme
+      if (d.getTime() < j1Time) break; // avant le J1 du régime
       const key = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
       const dayData = (days as any)[key];
       const hasFood = !!dayData?.foods?.length;
@@ -291,14 +228,7 @@
       const foods = dayData?.foods ?? [];
       const total = (foods as any[]).reduce((s: number, f: any) => s + (f.k||0), 0);
       const label = d.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
-      const jIdx = progJours.findIndex((j: any) => {
-        const pd = parseJour(j.jour);
-        if (!pd) return false;
-        return pd.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' }) === key;
-      });
-      const jd = jIdx >= 0 ? progJours[jIdx] : null;
-      const jNum = jIdx >= 0 ? jIdx + 1 : null;
-      const cible = jd?.calories ?? 0;
+      const jNum = d.getTime() >= j1Time ? Math.round((d.getTime() - j1Time) / 86400000) + 1 : null;
       const extraKcal = dayData?.extraKcal ?? 0;
       const sp = (foods as any[]).reduce((s: number, f: any) => s + (f.p||0), 0);
       const sg = (foods as any[]).reduce((s: number, f: any) => s + (f.g||0), 0);
@@ -330,7 +260,7 @@
           gMuscle = 0;
         }
       }
-      result.push({ key, label, jNum, foods, total, cible, expend, adaptation, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gMuscle, gFat, gWater });
+      result.push({ key, label, jNum, foods, total, expend, adaptation, extraKcal, p: sp, g: sg, l: sl, deficit, neutre, gMuscle, gFat, gWater });
     }
     return result;
   });
@@ -339,7 +269,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V12.6";
+  const BUILD = "V13.0";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -351,7 +281,7 @@
     const s = get(session);
     const data = get(appData) as any;
     if (!s || !data) return;
-    const kcal = parseInt(val) || 0;
+    const kcal = Math.max(0, Math.round(parseFloat(String(val).replace(',', '.')) || 0));
     const dayData = data.days?.[dayKey] ?? {};
     const newData = { ...data, days: { ...data.days, [dayKey]: { ...dayData, extraKcal: kcal } } };
     appData.set(newData);
@@ -496,13 +426,12 @@
     const kcalToLose = Math.round(kgFatToLose * 7700);
     const joursEstimes = avgDef > 0 ? Math.round(kcalToLose / avgDef) : null;
     const avg = avgMacros;
-    const lastJ = progJours.length ? progJours[progJours.length - 1] : null;
     const y = todayDate.getFullYear(), m = String(todayDate.getMonth()+1).padStart(2,'0'), d2 = String(todayDate.getDate()).padStart(2,'0');
     return {
       date_aujourdhui: `${y}-${m}-${d2}`,
       profil: { sexe: p.sex, age: nfp(p.age), taille_cm: nfp(p.height) },
       etat_actuel_mesure: { poids_kg: +curW.toFixed(1), masse_grasse_pct: +curBf.toFixed(1) },
-      objectif: { masse_grasse_cible_pct: bft, kg_gras_a_perdre: +kgFatToLose.toFixed(1), date_fin_programme: lastJ?.jour ?? null },
+      objectif: { masse_grasse_cible_pct: bft, kg_gras_a_perdre: +kgFatToLose.toFixed(1), date_objectif: END_DS },
       progression: {
         jours_logges: loggedDays,
         deficit_cumule_reel_kcal: cumulReel,
@@ -579,7 +508,7 @@
         </div>
       {:else}
         <div class="hero-num no-data">—</div>
-        <div class="caption" style="margin-top:6px">Aucune cible programme</div>
+        <div class="caption" style="margin-top:6px">Aucune cible du jour</div>
       {/if}
     </div>
 
@@ -696,7 +625,7 @@
         <div class="lost-lbl">% MG</div>
       </div>
     </div>
-    <div class="caption" style="margin-top:8px">Si tu perds du gras à ce rythme jusqu'à la fin du programme et que tu conserves ton muscle actuel</div>
+    <div class="caption" style="margin-top:8px">Si tu perds du gras à ce rythme jusqu'au 1er novembre et que tu conserves ton muscle actuel</div>
   </div>
   {/if}
   {/if}
@@ -757,15 +686,15 @@
       </div>
     {/if}
 
-    <!-- Sport supplémentaire -->
+    <!-- Sport cal : calories actives réelles (montre) du jour -->
     <div class="sport-extra-row">
-      <span class="sport-extra-label">🏃 Sport supplémentaire</span>
-      <input class="sport-extra-inp" type="number" min="0" step="50"
+      <span class="sport-extra-label">⌚ Sport cal</span>
+      <input class="sport-extra-inp" type="number" min="0" step="10"
         placeholder="0"
         value={today?.extraKcal ?? 0}
         onblur={(e) => saveExtraKcal((e.target as HTMLInputElement).value)}
       />
-      <span class="sport-extra-unit">kcal brûlées</span>
+      <span class="sport-extra-unit">kcal actives</span>
     </div>
     <div class="supp-row">
       {#each SUPPS as sp}
@@ -845,15 +774,15 @@
       {/each}
       <!-- Ajouter aliment -->
       <button class="hist-add-btn" onclick={() => openModal(day.key)}>+ Ajouter un aliment</button>
-      <!-- Sport supplémentaire -->
+      <!-- Sport cal : calories actives réelles (montre) de ce jour -->
       <div class="sport-extra-row" style="border-top:0.5px solid var(--c-border);margin-top:6px;padding-top:10px">
-        <span class="sport-extra-label">🏃 Sport sup.</span>
-        <input class="sport-extra-inp" type="number" min="0" step="50"
+        <span class="sport-extra-label">⌚ Sport cal</span>
+        <input class="sport-extra-inp" type="number" min="0" step="10"
           placeholder="0"
           value={day.extraKcal}
           onblur={(e) => saveExtraKcal((e.target as HTMLInputElement).value, day.key)}
         />
-        <span class="sport-extra-unit">kcal</span>
+        <span class="sport-extra-unit">kcal actives</span>
       </div>
       <div class="sport-extra-row">
         <span class="sport-extra-label">⚖️ Poids</span>
@@ -907,9 +836,6 @@
 .header { display:flex; align-items:center; justify-content:space-between; padding:20px 0 12px; }
 .date { font-size:20px; font-weight:500; color:var(--c-text); margin-top:3px; letter-spacing:-0.3px; display:flex; align-items:baseline; gap:8px; }
 .build-tag { font-size:11px; font-weight:500; color:var(--c-text3); letter-spacing:0; text-transform:none; }
-.day-badge { font-size:13px; font-weight:600; color:var(--c-text2); }
-.day-badge span { font-weight:400; color:var(--c-text3); }
-.hero-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
 .hero-card { padding:16px; }
 .hero-num { font-size:26px; font-weight:700; letter-spacing:-0.5px; line-height:1.1; margin:6px 0 0; }
 .hero-num.no-data { color:var(--c-text3); }
@@ -983,11 +909,9 @@
   /* Cellules colorees (mode clair) — palette FitNoobX */
   :global(html[data-theme='light']) .progress-card { background:#FFE98A; border-color:rgba(0,0,0,0.05); }
   :global(html[data-theme='light']) .hero-eat { background:#79E8B3; border-color:rgba(0,0,0,0.05); }
-  :global(html[data-theme='light']) .hero-retard { background:#BBEFFF; border-color:rgba(0,0,0,0.05); }
   :global(html[data-theme='light']) .progress-card .label,
   :global(html[data-theme='light']) .progress-card .caption,
   :global(html[data-theme='light']) .hero-eat .label,
-  :global(html[data-theme='light']) .hero-retard .label,
   :global(html[data-theme='light']) .hero-eat .hero-eat-sub { color:#1a1a1a; }
 
 .app-title { font-size:22px; font-weight:700; color:var(--c-text); letter-spacing:-0.5px; }
@@ -1007,14 +931,11 @@
 
   /* Alignement exact sur le design FitNoobX (onglet Suivi) */
   .progress-card { padding:16px; margin-bottom:8px; }
-  .hero-row { margin-bottom:8px; }
   .macro-row { margin-bottom:8px; }
   .coach-card { margin-bottom:8px; }
   .progress-card .caption { font-size:13px; color:var(--c-text3); }
   .progress-card .badge-accent { border-radius:20px; padding:3px 9px; font-weight:700; }
   .coach-btn { border-width:2px; }
-
-  .fat-note { font-size:11px; color:var(--c-text3); font-style:italic; margin-top:2px; }
 
   .heure-tag { font-size:14px; font-weight:400; color:var(--c-text2); letter-spacing:0; }
 

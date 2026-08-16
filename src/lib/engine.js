@@ -39,7 +39,7 @@ export function settingsFor(settingsLog, t) {
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
 
-/* dateList : [{ds, t}] trié ascendant (jours du programme, J1 -> fin).
+/* dateList : [{ds, t}] trié ascendant (un jour par entree, J1 -> fin).
    info(ds) -> { weight, bf, eaten, gluc, prot, extraKcal, sportKcal, logged }
    Renvoie { list:[record], byKey:{ds:record} }. Chaque record est CAUSAL. */
 export function buildTimeline({ dateList, settingsLog, todayTime, dayFrac, info }) {

@@ -4,7 +4,7 @@ import { createI18n } from './i18n';
 import type { Session } from './supabase';
 
 export type Theme = 'light' | 'dark';
-export type Tab = 'suivi' | 'programme' | 'graph' | 'aliments' | 'amis' | 'reglages';
+export type Tab = 'suivi' | 'graph' | 'aliments' | 'amis' | 'reglages';
 
 // Theme
 const savedTheme = (localStorage.getItem('fitpro_theme') as Theme) || 'dark';
@@ -27,7 +27,7 @@ export const activeTab = writable<Tab>('suivi');
 export const session = writable<Session | null>(null);
 export const authLoading = writable(true);
 
-// App data (programme + jours)
+// App data (état complet : jours, profil, favoris, réglages)
 export const appData = writable<Record<string, unknown> | null>(null);
 
 // Persist session in localStorage

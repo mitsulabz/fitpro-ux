@@ -52,7 +52,7 @@ const PENDING_KEY = 'fitpro_pending_save';
 function favMergeKey(f: any) { return ((f?.name ?? '') + '').trim().toLowerCase() + '|' + (f?.per ?? '100'); }
 
 // Fusionne l'état cloud (autre appareil) et l'état local (édition en cours).
-// Le local gagne sur profile/programme et sur les jours qu'il connaît ;
+// Le local gagne sur le profil, les réglages et les jours qu'il connaît ;
 // les jours et favoris ajoutés ailleurs sont conservés.
 export function mergeStates(cloud: any, local: any): any {
   if (!cloud) return local;

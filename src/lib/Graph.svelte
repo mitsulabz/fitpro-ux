@@ -13,7 +13,6 @@
     const data = (get(appData) as any) ?? {};
     const p = data.profile ?? {};
     const days = data.days ?? {};
-    const acts = data.programme?.activites ?? {};
     const J1 = Date.UTC(2026, 5, 16);      // 16 juin 2026
     const nowMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
     const log = (Array.isArray(data.programme?.settingsLog) && data.programme.settingsLog.length)
@@ -22,14 +21,13 @@
     const dl = Object.keys(days).map((ds) => ({ ds, t: dsToMs(ds) })).filter((x: any) => !isNaN(x.t)).sort((a: any, b: any) => a.t - b.t);
     const info = (ds: string) => {
       const dd: any = days[ds] ?? {}; const fds = dd.foods ?? [];
-      const pa = dd.progActivity; const an = pa === false ? '' : (pa?.name ?? '');
-      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal: (an && an !== 'Libre') ? (acts[an] ?? 0) : 0, libre: an === 'Libre', logged: fds.length > 0 };
+      return { weight: nf(dd.weight), bf: nf(dd.bf), eaten: fds.reduce((s: number,f: any)=>s+(f.k||0),0), gluc: fds.reduce((s: number,f: any)=>s+(f.g||0),0), prot: fds.reduce((s: number,f: any)=>s+(f.p||0),0), extraKcal: dd.extraKcal ?? 0, sportKcal: 0, libre: !!dd.libre, logged: fds.length > 0 };
     };
     const tl: any = buildTimeline({ dateList: dl, settingsLog: log, todayTime: nowMs, dayFrac: 1, info });
     // cohérence mensuelle : déficit cumulé vs perte de poids mesurée
     const _MO = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
     const byMonth: any = {};
-    const J1recon = dsToMs('16/06/2026'); // début du programme (J1)
+    const J1recon = dsToMs('16/06/2026'); // début du régime (J1)
     for (const r of tl.list as any[]) {
       if (!r.logged || r.deficit == null || r.isFuture || r.t < J1recon) continue;
       const dt = new Date(r.t);

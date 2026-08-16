@@ -3,7 +3,6 @@ export type Locale = 'fr' | 'en';
 const fr = {
   nav: {
     suivi: 'Suivi',
-    programme: 'Programme',
     graph: 'Graph',
     aliments: 'Aliments',
     amis: 'Amis',
@@ -17,11 +16,11 @@ const fr = {
     proteins: 'Protéines',
     carbs: 'Glucides',
     fats: 'Lipides',
-    cumul: 'Cumul programme',
+    cumul: 'Cumul déficit',
     since_start: 'depuis J1',
     goal_nov: 'Objectif Nov.',
     body_fat_projected: 'masse grasse projetée',
-    progress: 'Progression programme',
+    progress: 'Progression',
   },
   auth: {
     title: 'FitProX',
@@ -44,7 +43,6 @@ const fr = {
 const en: typeof fr = {
   nav: {
     suivi: 'Dashboard',
-    programme: 'Programme',
     graph: 'Graph',
     aliments: 'Foods',
     amis: 'Friends',
@@ -58,11 +56,11 @@ const en: typeof fr = {
     proteins: 'Proteins',
     carbs: 'Carbs',
     fats: 'Fats',
-    cumul: 'Programme total',
+    cumul: 'Total deficit',
     since_start: 'since day 1',
     goal_nov: 'Goal Nov.',
     body_fat_projected: 'projected body fat',
-    progress: 'Programme progress',
+    progress: 'Progress',
   },
   auth: {
     title: 'FitProX',
