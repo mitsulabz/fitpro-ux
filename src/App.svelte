@@ -1,7 +1,7 @@
 <script lang="ts">
   import { theme, activeTab, session, authLoading, appData, persistSession, restoreSession, t } from "./lib/store";
   import { loadAppState, saveAppState, refreshToken, upsertProfile, retryPendingSave } from "./lib/supabase";
-  import { migrateSportV13 } from "./lib/migrate";
+  import { migrateSportV13, trimPreJ1 } from "./lib/migrate";
   import AuthGate from "./lib/AuthGate.svelte";
   import BottomNav from "./lib/BottomNav.svelte";
   import Dashboard from "./lib/Dashboard.svelte";
@@ -14,11 +14,12 @@
 
   document.documentElement.setAttribute("data-theme", get(theme));
 
-  // Migration V13 (sport programme → Sport cal) appliquée une seule fois au chargement
+  // Migrations one-shot au chargement : V13 (sport programme → Sport cal) puis V13.1 (J1 au 22/06)
   function applyLoaded(s: NonNullable<typeof $session>, data: Record<string, unknown>) {
     const m = migrateSportV13(data);
-    appData.set(m.data);
-    if (m.changed) saveAppState(s.access_token, s.user.id, m.data);
+    const t2 = trimPreJ1(m.data);
+    appData.set(t2.data);
+    if (m.changed || t2.changed) saveAppState(s.access_token, s.user.id, t2.data);
   }
 
   async function loadData(s: typeof $session) {

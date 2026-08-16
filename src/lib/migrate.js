@@ -66,3 +66,22 @@ export function migrateSportV13(data) {
   // jour a réellement été modifié (évite une écriture cloud gratuite).
   return { data: { ...data, days: newDays, _sportV13: true }, changed };
 }
+
+/* V13.1 : le J1 passe au 22/06/2026 — la compétition du 20/06 (dépense non
+   mesurable, pesées manquantes) polluait le bilan énergétique. Purge one-shot
+   de tous les jours antérieurs au 22/06 (sauvegardés dans les exports de
+   l'utilisateur). Idempotente via le flag _trimJ1_2206. */
+export function trimPreJ1(data) {
+  if (!data || data._trimJ1_2206) return { data, changed: false };
+  const J1 = new Date(2026, 5, 22).getTime();
+  const days = data.days ?? {};
+  const newDays = {};
+  let changed = false;
+  for (const ds of Object.keys(days)) {
+    const p = String(ds).split('/').map(Number);
+    const t = p.length === 3 ? new Date(p[2], p[1] - 1, p[0]).getTime() : NaN;
+    if (!isNaN(t) && t < J1) { changed = true; continue; }
+    newDays[ds] = days[ds];
+  }
+  return { data: { ...data, days: newDays, _trimJ1_2206: true }, changed };
+}

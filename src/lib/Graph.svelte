@@ -13,10 +13,10 @@
     const data = (get(appData) as any) ?? {};
     const p = data.profile ?? {};
     const days = data.days ?? {};
-    const J1 = Date.UTC(2026, 5, 16);      // 16 juin 2026
+    const J1 = Date.UTC(2026, 5, 22);      // 22 juin 2026 (J1 du régime)
     const nowMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
     const log = (Array.isArray(data.programme?.settingsLog) && data.programme.settingsLog.length)
-      ? data.programme.settingsLog : [{ from: '16/06/2026', baseRef: 2020, poidsRef: 97.92, adaptCoef: ADAPT_DEFAULT }];
+      ? data.programme.settingsLog : [{ from: '22/06/2026', baseRef: 2020, poidsRef: 97.92, adaptCoef: ADAPT_DEFAULT }];
     // timeline (glycogène) sur les jours loggés
     const dl = Object.keys(days).map((ds) => ({ ds, t: dsToMs(ds) })).filter((x: any) => !isNaN(x.t)).sort((a: any, b: any) => a.t - b.t);
     const info = (ds: string) => {
@@ -27,7 +27,7 @@
     // cohérence mensuelle : déficit cumulé vs perte de poids mesurée
     const _MO = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
     const byMonth: any = {};
-    const J1recon = dsToMs('16/06/2026'); // début du régime (J1)
+    const J1recon = dsToMs('22/06/2026'); // début du régime (J1)
     for (const r of tl.list as any[]) {
       if (!r.logged || r.deficit == null || r.isFuture || r.t < J1recon) continue;
       const dt = new Date(r.t);
