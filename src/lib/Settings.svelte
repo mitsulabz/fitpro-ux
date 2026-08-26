@@ -54,6 +54,38 @@
     URL.revokeObjectURL(url);
   }
 
+  // Liste des aliments enregistrés + macros, en CSV.
+  function exportAliments() {
+    const data = $appData as any;
+    if (!data) return;
+    const favs = [...(Array.isArray(data.favorites) ? data.favorites : [])]
+      .sort((a: any, b: any) => (a.name ?? '').localeCompare(b.name ?? '', 'fr'));
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const rows = ['nom,base,kcal,proteines_g,glucides_g,lipides_g,fibres_g,sel_g'];
+    for (const f of favs) {
+      rows.push([
+        esc(f.name),
+        f.per === 'unit' ? 'portion' : '100g',
+        Math.round(nf(f.kcal)),
+        +nf(f.p).toFixed(1),
+        +nf(f.g).toFixed(1),
+        +nf(f.l).toFixed(1),
+        f.fi != null && f.fi !== '' ? +nf(f.fi).toFixed(1) : '',
+        f.sel != null && f.sel !== '' ? +nf(f.sel).toFixed(2) : '',
+      ].join(','));
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fitpro-aliments-${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   let importStatus = $state('');
   let fileInput: HTMLInputElement;
 
@@ -202,6 +234,10 @@
 
   <div class="section-title">Données</div>
   <div class="section">
+    <button class="card setting-row" onclick={exportAliments}>
+      <span class="body">Export aliments (CSV)</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
     <button class="card setting-row" onclick={exportJournal}>
       <span class="body">Exporter le journal (CSV pour IA)</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -231,7 +267,7 @@
     </button>
   </div>
 
-  <div class="version caption">FitProX · V13.2</div>
+  <div class="version caption">FitProX · V13.3</div>
 </div>
 
 <style>
