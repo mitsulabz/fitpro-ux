@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t, appData, session, persistSession } from "./store";
+  import { t, appData, session } from "./store";
   import { nf } from './calc';
   import { buildTimeline, sundayRule, APPORT_FLOOR } from './engine';
   import { saveAppState, refreshToken } from "./supabase";
@@ -94,13 +94,10 @@
     { k:0, p:0, g:0, l:0 }
   ));
 
-  const tdeeToday = $derived(todayRec ? Math.round(todayRec.base + todayRec.sportK) : 0);
-  const tBrulees = $derived(tdeeToday);
   const tIntake = $derived(todayRec
     ? (todayRec.libre ? Math.round(todayRec.base + todayRec.sportK)
        : Math.round(Math.max(APPORT_FLOOR, (todayRec.base + todayRec.sportK) * 0.75)))
     : 1850);
-  const deficit = $derived(Math.round(macros.k) - tBrulees);
   const curBody = $derived.by(() => {
     const dd = (days as any) ?? {};
     let last: any = null;
@@ -124,14 +121,7 @@
     return { p, g, l };
   });
 
-  const totalDays = $derived((timeline as any).list.length);
-  const dayNum = $derived.by(() => {
-    const j1 = parseJour(J1_DS)!; j1.setHours(0,0,0,0);
-    const n = Math.round((todayDate.getTime() - j1.getTime()) / 86400000) + 1;
-    return n >= 1 && n <= totalDays ? n : null;
-  });
-  // ── Progression reelle : kcal reellement brulees / total a bruler jusqu'a la fin ──
-  const profile = $derived(($appData as any)?.profile ?? {});
+  // ── Cumul reel des deficits (alimente le cumul et la %MG projetee) ──
   const nfp = nf;
   const progStats = $derived.by(() => {
     const w = curBody.w || 100;
@@ -160,14 +150,6 @@
     const protPct = protTarget > 0 ? protEaten / protTarget : 1;
     return { totalCible, realBrule, expectedSoFar, fatKcal, leanKcalDef, fatShare, protPct, defKcalPos, protShortfall };
   });
-  const progressPct = $derived(progStats.totalCible > 0
-    ? Math.max(0, Math.min(100, Math.round(progStats.realBrule / progStats.totalCible * 100)))
-    : 0);
-
-  // Estimation MG perdue (meilleur cas : suppose assez de proteines pour preserver le muscle)
-  function fmtG(g: number): string {
-    return g >= 1000 ? (g / 1000).toFixed(2).replace('.', ',') + ' kg' : Math.round(g) + ' g';
-  }
   const fatLost = $derived.by(() => {
     // ancré sur les pesées MESURÉES (poids + %MG saisis) : vérité, pas modèle
     const meas: any[] = [];
@@ -269,7 +251,7 @@
   function pct(a: number, b: number) { return b > 0 ? Math.min(100, Math.round(a/b*100)) : 0; }
   function fmt(n: number) { return (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr'); }
 
-  const BUILD = "V13.3";
+  const BUILD = "V13.4";
   const dateLabel = $derived((() => { const s = todayDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); return s.charAt(0).toUpperCase() + s.slice(1); })());
 
   let showModal = $state(false);
@@ -399,71 +381,6 @@
     saveAppState(s.access_token, s.user.id, newData);
   }
 
-  const SUPABASE_URL = 'https://arydsxswhbgpfayjgtak.supabase.co';
-  let coachLoading = $state(false);
-  let coachText = $state('');
-  let coachError = $state('');
-
-  function buildCoachSummary() {
-    const p = profile as any;
-    const bft = nfp(p.bft) || 20;
-    // état mesuré actuel (dernière pesée) + départ
-    const meas: any[] = [];
-    for (const k of Object.keys(days as any)) {
-      const d: any = (days as any)[k]; const w = nfp(d?.weight), bf = nfp(d?.bf);
-      if (w > 0 && bf > 0) { const pr = k.split('/').map(Number); if (pr.length === 3) meas.push({ t: new Date(pr[2], pr[1]-1, pr[0]).getTime(), w, bf }); }
-    }
-    meas.sort((a, b) => a.t - b.t);
-    const nowM = meas.length ? meas[meas.length - 1] : null;
-    const curW = nowM ? nowM.w : nfp(p.weight);
-    const curBf = nowM ? nowM.bf : nfp(p.bf);
-    const loggedDays = (timeline as any).list.filter((r: any) => r.logged && !r.isFuture).length;
-    const cumulReel = Math.round(progStats.realBrule);
-    const avgDef = loggedDays ? Math.round(cumulReel / loggedDays) : 0;
-    const lean = curW * (1 - curBf / 100);
-    const targetW = bft > 0 ? lean / (1 - bft / 100) : curW;
-    const kgFatToLose = Math.max(0, curW - targetW);
-    const kcalToLose = Math.round(kgFatToLose * 7700);
-    const joursEstimes = avgDef > 0 ? Math.round(kcalToLose / avgDef) : null;
-    const avg = avgMacros;
-    const y = todayDate.getFullYear(), m = String(todayDate.getMonth()+1).padStart(2,'0'), d2 = String(todayDate.getDate()).padStart(2,'0');
-    return {
-      date_aujourdhui: `${y}-${m}-${d2}`,
-      profil: { sexe: p.sex, age: nfp(p.age), taille_cm: nfp(p.height) },
-      etat_actuel_mesure: { poids_kg: +curW.toFixed(1), masse_grasse_pct: +curBf.toFixed(1) },
-      objectif: { masse_grasse_cible_pct: bft, kg_gras_a_perdre: +kgFatToLose.toFixed(1), date_objectif: END_DS },
-      progression: {
-        jours_logges: loggedDays,
-        deficit_cumule_reel_kcal: cumulReel,
-        deficit_moyen_par_jour_kcal: avgDef,
-        jours_estimes_pour_objectif: joursEstimes,
-      },
-      macros_moyennes_par_jour: avg ? { proteines_g: avg.p, glucides_g: avg.g, lipides_g: avg.l } : null,
-      cible_proteines_g: Math.round(2.2 * lean),
-    };
-  }
-
-  async function runCoach() {
-    coachLoading = true; coachText = ''; coachError = '';
-    try {
-      const s = get(session);
-      let token = s?.access_token ?? '';
-      try {
-        const fresh = await refreshToken(s!.refresh_token);
-        persistSession(fresh);
-        token = fresh.access_token;
-      } catch {}
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/coach`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ summary: buildCoachSummary() }),
-      });
-      const d = await r.json();
-      if (d.text) coachText = d.text;
-      else coachError = d.error ?? 'Erreur coach';
-    } catch { coachError = 'Erreur réseau'; }
-    coachLoading = false;
-  }
 
 
 </script>
@@ -477,56 +394,12 @@
     <div class="app-title">FitPro<span class="x">X</span></div>
   </div>
 
-  {#if totalDays > 0}
-  <div class="card progress-card">
-    <div class="prog-top">
-      <span class="label">{$t.dashboard.progress}{#if dayNum} · J{dayNum} / J{totalDays}{/if}</span>
-      <span class="badge-accent">{progressPct}%</span>
-    </div>
-    <div class="progress-bar" style="margin-top:10px">
-      <div class="progress-fill" style="width:{progressPct}%"></div>
-    </div>
-    <div class="caption" style="margin-top:6px">{Math.max(0, Math.round(progStats.realBrule)).toLocaleString('fr')} sur {Math.round(progStats.totalCible).toLocaleString('fr')} kcal brûlées</div>
-  </div>
-  {/if}
-
   {#if sundaySug?.show && sundaySug.delta !== 0}
   <div class="card sunday-card">
     <span class="sunday-ico">📅</span>
     <span class="sunday-msg">{sundaySug.msg}</span>
   </div>
   {/if}
-
-  <!-- Coach IA -->
-  <div class="card hero-card hero-eat">
-      <div class="label">Journée à</div>
-      {#if tIntake > 0}
-        {@const reste = tIntake - macros.k}
-        <div class="hero-num" style="color:var(--c-text)">{Math.round(tIntake).toLocaleString('fr')}<span class="hero-unit"> / {tdeeToday.toLocaleString('fr')} kcal</span></div>
-        <div class="caption hero-eat-sub" style="margin-top:6px">
-          {reste >= 0 ? `reste ${Math.round(reste).toLocaleString('fr')} kcal à manger` : `dépassé de ${Math.round(-reste).toLocaleString('fr')} kcal`}
-        </div>
-      {:else}
-        <div class="hero-num no-data">—</div>
-        <div class="caption" style="margin-top:6px">Aucune cible du jour</div>
-      {/if}
-    </div>
-
-
-  <div class="card coach-card">
-    <button class="coach-btn" onclick={runCoach} disabled={coachLoading}>
-      {coachLoading ? '⏳ Analyse en cours…' : '🤖 Demander un bilan au coach'}
-    </button>
-    {#if coachText}
-      <div class="coach-out">
-        <div class="coach-text">{coachText}</div>
-        <button class="coach-close" onclick={() => coachText = ''}>✕ Fermer</button>
-      </div>
-    {/if}
-    {#if coachError}
-      <div class="coach-error">{coachError}</div>
-    {/if}
-  </div>
 
   {#if avgMacros}
   <div class="section-label" style="margin-top:0">Moyenne / jour depuis le début ({avgMacros.n} j)</div>
@@ -548,87 +421,6 @@
   </div>
   {/if}
 
-  {#if fatLost}
-  <div class="card lost-card">
-    <div class="lost-grid">
-      <div class="lost-item">
-        <div class="lost-val">−{Math.max(0, fatLost.weightLostKg).toFixed(2).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{Math.max(0, fatLost.fatLostKg).toFixed(2).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Gras perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{fatLost.nowW.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - fatLost.bfNow).toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG perdu</div>
-      </div>
-      <div class="lost-item">
-        {#if fatLost.leanChangeKg < 0}
-          <div class="lost-val" style="color:var(--c-green)">+{Math.abs(fatLost.leanChangeKg).toFixed(2).replace('.', ',')} kg</div>
-          <div class="lost-lbl">Muscle gagné</div>
-        {:else}
-          <div class="lost-val" style="color:var(--c-red)">−{fatLost.leanChangeKg.toFixed(2).replace('.', ',')} kg</div>
-          <div class="lost-lbl">Muscle perdu</div>
-        {/if}
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{fatLost.bfNow.toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG</div>
-      </div>
-    </div>
-    <div class="caption" style="margin-top:8px">Mesuré depuis J1 sur tes pesées + %MG{#if fatLost.leanChangeKg < 0} · tu perds du gras ET gagnes du muscle (recomposition) 💪{/if}</div>
-  </div>
-
-  {#if progStats.expectedSoFar > 0 && progStats.totalCible > 0}
-  {@const futFrac = Math.max(0, (progStats.totalCible - progStats.expectedSoFar) / progStats.expectedSoFar)}
-  {@const futFatKg = Math.max(0, fatLost.fatLostKg) * futFrac}
-  {@const endW = fatLost.nowW - futFatKg}
-  {@const endFat = fatLost.nowFat - futFatKg}
-  {@const endBf = endW > 0 ? Math.max(0, endFat / endW * 100) : fatLost.bfNow}
-  {@const totWeightKg = fatLost.startW - endW}
-  {@const totFatKg = fatLost.startFat - endFat}
-  <div class="card lost-card">
-    <div class="section-title-inline">Projection à ton rythme actuel (J{totalDays})</div>
-    <div class="lost-grid">
-      <div class="lost-item">
-        <div class="lost-val">−{totWeightKg.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{totFatKg.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Gras perdu</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{endW.toFixed(1).replace('.', ',')} kg</div>
-        <div class="lost-lbl">Poids</div>
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-green)">−{(fatLost.bf - endBf).toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG perdu</div>
-      </div>
-      <div class="lost-item">
-        {#if fatLost.leanChangeKg < 0}
-          <div class="lost-val" style="color:var(--c-green)">+{Math.abs(fatLost.leanChangeKg).toFixed(2).replace('.', ',')} kg</div>
-          <div class="lost-lbl">Muscle</div>
-        {:else}
-          <div class="lost-val" style="color:var(--c-red)">−{fatLost.leanChangeKg.toFixed(2).replace('.', ',')} kg</div>
-          <div class="lost-lbl">Muscle</div>
-        {/if}
-      </div>
-      <div class="lost-item">
-        <div class="lost-val" style="color:var(--c-blue)">{endBf.toFixed(1).replace('.', ',')} %</div>
-        <div class="lost-lbl">% MG</div>
-      </div>
-    </div>
-    <div class="caption" style="margin-top:8px">Si tu perds du gras à ce rythme jusqu'au 1er novembre et que tu conserves ton muscle actuel</div>
-  </div>
-  {/if}
-  {/if}
 
   <div class="section-label" style="margin-top:0">Aujourd'hui</div>
   <div class="macro-row">
@@ -836,17 +628,7 @@
 .header { display:flex; align-items:center; justify-content:space-between; padding:20px 0 12px; }
 .date { font-size:20px; font-weight:500; color:var(--c-text); margin-top:3px; letter-spacing:-0.3px; display:flex; align-items:baseline; gap:8px; }
 .build-tag { font-size:11px; font-weight:500; color:var(--c-text3); letter-spacing:0; text-transform:none; }
-.hero-card { padding:16px; }
-.hero-num { font-size:26px; font-weight:700; letter-spacing:-0.5px; line-height:1.1; margin:6px 0 0; }
-.hero-num.no-data { color:var(--c-text3); }
-.hero-unit { font-size:13px; font-weight:400; letter-spacing:0; margin-left:3px; color:var(--c-text2); }
 .macro-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
-.lost-card { padding:14px; margin-bottom:10px; }
-.section-title-inline { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.06em; color:var(--c-text3); margin-bottom:10px; }
-.lost-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 6px; }
-.lost-item { text-align:center; }
-.lost-val { font-size:15px; font-weight:700; color:var(--c-text); white-space:nowrap; }
-.lost-lbl { font-size:11px; color:var(--c-text3); margin-top:2px; }
 .macro-card { padding:14px; }
 .macro-val { font-size:18px; font-weight:600; color:var(--c-text); }
 .macro-target { font-size:11px; font-weight:400; color:var(--c-text3); }
@@ -878,16 +660,7 @@
 .stat-card { display:flex; flex-direction:column; gap:4px; padding:16px; }
 .value-accent { font-size:24px; font-weight:500; letter-spacing:-0.5px; }
 .value-sm { font-size:24px; font-weight:500; letter-spacing:-0.5px; color:var(--c-text); }
-.progress-card { padding:18px; margin-bottom:10px; }
-.coach-card { padding:0; margin-bottom:10px; background:transparent; border:none; }
-.coach-btn { width:100%; border:1px solid var(--c-accent); background:transparent; color:var(--c-accent); border-radius:var(--r-md); padding:16px; font-weight:700; font-size:15px; cursor:pointer; font-family:var(--font); transition:opacity .15s; }
-.coach-btn:disabled { opacity:.6; cursor:not-allowed; }
-.coach-out { margin-top:12px; }
-.coach-text { font-size:14px; line-height:1.65; color:var(--c-text); white-space:pre-wrap; }
-.coach-close { margin-top:10px; border:none; background:none; color:var(--c-text3); font-size:12px; cursor:pointer; padding:0; font-family:var(--font); }
-.coach-error { margin-top:10px; font-size:13px; color:#e05; }
 
-.prog-top { display:flex; align-items:center; justify-content:space-between; }
 
 .section-label { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--c-text3); margin:14px 0 8px; }
 .hist-card { padding:0; margin-bottom:6px; overflow:hidden; }
@@ -907,35 +680,18 @@
 
 
   /* Cellules colorees (mode clair) — palette FitNoobX */
-  :global(html[data-theme='light']) .progress-card { background:#FFE98A; border-color:rgba(0,0,0,0.05); }
-  :global(html[data-theme='light']) .hero-eat { background:#79E8B3; border-color:rgba(0,0,0,0.05); }
-  :global(html[data-theme='light']) .progress-card .label,
-  :global(html[data-theme='light']) .progress-card .caption,
-  :global(html[data-theme='light']) .hero-eat .label,
-  :global(html[data-theme='light']) .hero-eat .hero-eat-sub { color:#1a1a1a; }
 
 .app-title { font-size:22px; font-weight:700; color:var(--c-text); letter-spacing:-0.5px; }
 .app-title .x { color:var(--c-accent); }
 
   /* Polices uniformisees des cellules (style FitNoobX) */
-  .progress-card .label { font-size:14px; font-weight:700; letter-spacing:.05em; }
-  .hero-card .label { font-size:11px; font-weight:600; }
-  .hero-card .caption { font-size:13px; font-weight:500; }
   .macro-card .label { font-weight:600; }
-  :global(html[data-theme='light']) .coach-btn { background:#FFC2DF; border-color:#FFC2DF; color:#1a1a1a; }
 
   /* Uniformisation avec FitNoobX */
   .header .label { font-weight:600; letter-spacing:.07em; }
-  .progress-card .progress-bar { height:6px; border-radius:3px; background:var(--c-surface2); }
-  .progress-card .progress-fill { border-radius:3px; }
 
   /* Alignement exact sur le design FitNoobX (onglet Suivi) */
-  .progress-card { padding:16px; margin-bottom:8px; }
   .macro-row { margin-bottom:8px; }
-  .coach-card { margin-bottom:8px; }
-  .progress-card .caption { font-size:13px; color:var(--c-text3); }
-  .progress-card .badge-accent { border-radius:20px; padding:3px 9px; font-weight:700; }
-  .coach-btn { border-width:2px; }
 
   .heure-tag { font-size:14px; font-weight:400; color:var(--c-text2); letter-spacing:0; }
 
